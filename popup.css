@@ -140,7 +140,7 @@ textarea:focus {
     padding: var(--spacing) 0 0 0;
 }
 .actions button {
-    padding: 6px 16px;
+    padding: 6px 12px;
     font-size: 13px;
     color: var(--accent);
     background: none;

@@ -1,6 +1,6 @@
 // 전역
 let currentMetadataGlobal = {};
-let currentTimestampGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위함
+let currentTimestampIdGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위함
 
 // ----------------------------------------------------------------
 
@@ -96,7 +96,7 @@ if (copyMetadataBtn) {
       .catch(err => console.error('메타데이터 복사 실패:', err));
   });
 }
-// 이벤트 리슨 동작 3. "YAML로 복사" 버튼 클릭 시 YAML 형식 메타데이터 클립보드에 복사
+// 이벤트 리슨 동작 3. "YAML로 복사" 버튼 클릭 시 YAML 형식으로 메타데이터 및 인용 표기를 클립보드에 복사
 const copyYamlBtn = document.getElementById('copy-yaml-btn');
 if (copyYamlBtn) {
   copyYamlBtn.addEventListener('click', () => {
@@ -148,7 +148,6 @@ if (copyYamlBtn) {
     const yamlText = [
       '---',
       authorYaml,
-      'translator: ',
       `title: ${meta.title_main}`,
       `subtitle: ${meta.title_sub}`,
       `journal: ${meta.journal_name}`,
@@ -160,8 +159,6 @@ if (copyYamlBtn) {
       'PDF: ',
       'tags: ',
       'project: ',
-      `author_add'l_info: `,
-      'cit_of_old_original_ver: ',
       'check: false',
       '---',
       `> [!abstract] 초록`,
@@ -173,6 +170,26 @@ if (copyYamlBtn) {
         showToast('서지정보(YAML)가 복사되었습니다');
       })
       .catch(err => console.error('YAML 복사 실패:', err));
+  });
+}
+// 이벤트 리슨 동작 4. "내역에 수정사항 저장" 버튼 클릭 시 메타데이터를 내역에 저장
+// "내역에 수정사항 저장" 버튼 클릭 시, 현재 수정된 metadata를 history에 덮어쓰기
+const saveMetaBtn = document.getElementById('save-metadata-btn');
+if (saveMetaBtn) {
+  saveMetaBtn.addEventListener('click', () => {
+    chrome.storage.local.get({ history: [] }, items => {
+      const history = items.history;
+      const idx = history.findIndex(item => item.timestampId === currentTimestampIdGlobal);
+      if (idx >= 0) {
+        history[idx].metadata = { ...currentMetadataGlobal };
+        chrome.storage.local.set({ history }, () => {
+          showToast('서지정보의 직접 수정이 내역에 저장되었습니다');
+          renderHistory();
+        });
+      } else {
+        showToastError('저장된 내역을 찾을 수 없어 수정사항이 저장되지 못했습니다');
+      }
+    });
   });
 }
 // 사용자에게 잠깐 보이는 알림을 생성하고 제거
@@ -252,7 +269,7 @@ function getMetadataText(meta) {
   return lines.join('\n');
 }
 
-// 메타 1: PageInfo(메타데이터 + DB 타입 + URL + timestamp) 요청
+// 메타 1: PageInfo(Metadata + AcademicDB + URL + Timestamp + Timestamp ID) 요청
 async function requestPageInfo() {
   // 현재 활성 탭 정보 가져오기
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -270,7 +287,7 @@ async function requestPageInfo() {
   }
   // 수신한 pageInfo 유효성 검사
   const pageInfo = response.pageInfo;
-  const { metadata, academicDB, url, timestamp } = pageInfo;
+  const { metadata, academicDB, url, timestamp, timestampId } = pageInfo;
   // 필수 필드 존재 및 빈 문자열 검사
   if (
     !metadata ||
@@ -687,8 +704,8 @@ function renderHistory() {
     const history = isDedup
       ? deduplicateHistory(baseHistory)        // timestamp 제외 기준 중복 제거
       : deduplicateFullHistory(baseHistory);   // 전체 필드 기준 중복 제거 (timestamp 포함)
-    // 타임스탬프 최신순 정렬 (문자열 비교로 가능)
-    history.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    // timestampId 기준 내림차순 정렬 (밀리초 단위 정확도)
+    history.sort((a, b) => b.timestampId - a.timestampId);
     const container = document.getElementById('history-list');
     if (!container) return;
     container.innerHTML = '';
@@ -755,7 +772,7 @@ function renderHistory() {
             currentMetadataGlobal = item.metadata;
             try {
               fillMetadataField(item.metadata);
-              currentTimestampGlobal = item.timestamp;
+              currentTimestampIdGlobal = item.timestampId;
             } catch (err) {
               console.error('fillMetadataField error:', err);
               showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
@@ -777,7 +794,7 @@ function renderHistory() {
             currentMetadataGlobal = item.metadata;
             try {
               fillMetadataField(item.metadata);
-              currentTimestampGlobal = item.timestamp;
+              currentTimestampIdGlobal = item.timestampId;
             } catch (err) {
               console.error('fillMetadataField error:', err);
               showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
@@ -920,7 +937,6 @@ document.getElementById('confirm-no').addEventListener('click', () => {
 
 // ----------------------------------------------------------------
 
-
 // ** 실행 **
 
 // 팝업 DOM이 로드되는 것을 리슨하여,
@@ -931,7 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
   requestPageInfo()
     .then(pageInfo => {
       savePageInfoToHistory(pageInfo)
-      currentTimestampGlobal = pageInfo.timestamp
+      currentTimestampIdGlobal = pageInfo.timestampId
     })
     .catch(err => console.log('히스토리 저장 실패.', err));
   // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기. | 조합된 인용 표기에 

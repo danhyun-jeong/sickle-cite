@@ -709,7 +709,8 @@ function getPageInfo() {
   const minutes2 = String(now.getMinutes()).padStart(2, '0');
   const seconds2 = String(now.getSeconds()).padStart(2, '0');
   const timestamp = `${year2}.${month2}.${day2}. ${hours2}:${minutes2}:${seconds2}`;
-  return { metadata, academicDB, url, timestamp };
+  const timestampId = Date.now();
+  return { metadata, academicDB, url, timestamp, timestampId };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sickle-Cite BETA",
-    "version": "1.4.2",
+    "version": "1.5.0",
     "icons": {
       "128": "icons/icon128.png"
     },
@@ -19,7 +19,7 @@
     }
   ],
     "background": {
-      "service_worker": "background.js"
+      "service_worker": "service-worker.js"
     },
     "commands":{
       "open-extension-popup": {
@@ -27,7 +27,7 @@
           "default": "Ctrl+Shift+K",
           "mac": "Command+Shift+K"
         },
-        "description": "현재 페이지에서 실행(= 팝업 창 열기 = 현재 페이지에서 논문 서지사항 추출)하기"
+        "description": "현재 페이지에서 팝업 창 열기 = 현재 페이지에서 논문 서지사항 추출하기"
       }
     },
     "action": {
