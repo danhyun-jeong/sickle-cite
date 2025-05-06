@@ -1,5 +1,6 @@
 // 전역
 let currentMetadataGlobal = {};
+let currentTimestampGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위함
 
 // ----------------------------------------------------------------
 
@@ -55,7 +56,7 @@ volIssSelect.addEventListener('change', updateVolIssOptions);
 // 초기 로드 시 호출
 updateVolIssOptions();
 
-// 기능 1. "클립보드에 복사" 버튼 클릭 시 인용문 클립보드에 복사
+// 이벤트 리슨 동작 1. "클립보드에 복사" 버튼 클릭 시 인용문 클립보드에 복사
 const copyBtn = document.getElementById('copy-citation-btn');
 if (copyBtn) {
   copyBtn.addEventListener('click', () => {
@@ -66,16 +67,16 @@ if (copyBtn) {
       showToastError('메타데이터가 없습니다');
       return;
     }
-    const citationText = getCombinedCitation(currentMetadataGlobal, getStyleSettings());
+    const citationText = document.querySelector('textarea.citation-input')?.value || '';
     navigator.clipboard.writeText(citationText)
       .then(() => {
-        console.log('조합된 서지사항이 클립보드에 복사되었습니다:', citationText);
-        showToast('조합된 서지사항이 복사되었습니다');
+        console.log('조합된 인용 표기가 클립보드에 복사되었습니다:', citationText);
+        showToast('조합된 인용 표기가 복사되었습니다');
       })
       .catch(err => console.error('복사 실패:', err));
   });
 }
-// 기능 2. "텍스트로 복사" 버튼 클릭 시 메타데이터 텍스트 클립보드에 복사
+// 이벤트 리슨 동작 2. "텍스트로 복사" 버튼 클릭 시 메타데이터 텍스트 클립보드에 복사
 const copyMetadataBtn = document.getElementById('copy-metadata-btn');
 if (copyMetadataBtn) {
   copyMetadataBtn.addEventListener('click', () => {
@@ -95,7 +96,7 @@ if (copyMetadataBtn) {
       .catch(err => console.error('메타데이터 복사 실패:', err));
   });
 }
-// 기능 3. "YAML로 복사" 버튼 클릭 시 YAML 형식 메타데이터 클립보드에 복사
+// 이벤트 리슨 동작 3. "YAML로 복사" 버튼 클릭 시 YAML 형식 메타데이터 클립보드에 복사
 const copyYamlBtn = document.getElementById('copy-yaml-btn');
 if (copyYamlBtn) {
   copyYamlBtn.addEventListener('click', () => {
@@ -287,7 +288,7 @@ async function requestPageInfo() {
   return pageInfo;
 }
 
-// 메타 2: 추출된(받아온) 최초 메타데이터를 탭1 좌측의 각 메타데이터 필드에 채우기
+// 메타 2: 메타데이터를 탭1 좌측의 각 메타데이터 필드에 채우기 (추출된(받아온) 최초 메타데이터를 채우거나, 탭 2에서 클릭한 메타데이터를 채우거나)
 function fillMetadataField(meta) {
   // undefined인 메타데이터 속성은 빈 문자열로 대체
   Object.keys(meta).forEach(key => {
@@ -342,6 +343,7 @@ function fillMetadataField(meta) {
 }
 
 // 메타 3: 탭1 좌측 메타데이터 필드에서 직접 수정이 이뤄질 경우, 그러한 이벤트를 리슨해서 메타데이터를 업데이트
+// 이 함수는 매개변수에다가 변경사항을 덧씌워서 그 변수 값을 결과로 반환함
 function updateCurrentMetadata(meta) {
   const keys = ['authors','title_main','title_sub','journal_name','volume','issue','publisher','year','page_first','page_last','keywords','abstract'];
   keys.forEach(key => {
@@ -351,10 +353,10 @@ function updateCurrentMetadata(meta) {
       meta[key] = el.value;
       console.log(`메타데이터 업데이트: ${key} =`, el.value)
       console.log('업데이트 된 메타데이터는 다음과 같음:', getMetadataText(meta));
-      updateCitation(meta)
+      fillCitation(meta)
     });
   });
-  return meta;
+  return meta; // 이후에 이 결과는 fetchCurrentMetadata()를 거쳐 전역변수 currentMetadataGlobal에 저장될 것임
 }
 
 // 메타 1~3 종합
@@ -370,7 +372,9 @@ async function fetchCurrentMetadata() {
   // 최초 메타데이터를 탭1 좌측의 각 메타데이터 필드에 채우기
   fillMetadataField(recievedMetadata);
   // 탭1 좌측 메타데이터 필드에서 직접 수정 시 즉각 업데이트, 수정된 최신 메타데이터를 반환
-  return updateCurrentMetadata(currentMetadata);
+  return updateCurrentMetadata(currentMetadata); // currentMetadata를 받아와서 거기에 변경사항을 업데이트하고 결과로 반환
+  // 이때 결과는 updateCurrentMetadata에 의해 사용자의 직접 수정을 반영한 currentMetadata임
+  // 이후 이는 다시 전역변수 currentMetadataGlobal에 저장될 것임
 }
 
 // 설정 1: 탭3의 설정값을 객체로 반환
@@ -381,12 +385,12 @@ function getStyleSettings() {
   if (sepOption === 'dash-space') titleSeparator = ' — ';
   else if (sepOption === 'dash-nospace') titleSeparator = '—';
   else if (sepOption === 'colon') titleSeparator = ': ';
-
+  
   // 권호수 표기 방식
   const volIssOption = document.getElementById('vol-iss-style').value;
   let volumePrefix = '', volumeSuffix = '', volumeIssueSeparator = '', issuePrefix = '', issueSuffix = '', eitherPrefix = '', eitherSuffix = '';
   if (volIssOption === 'none') {
-    // no prefix/suffix, parentheses for issue
+    // 단위와 접두사를 안 쓸 경우, 호수만 괄호에 넣어서 표기
     issuePrefix = '(';
     issueSuffix = ')';
   } else if (volIssOption === 'suffix') {
@@ -463,7 +467,7 @@ function resaveChangedStyleSettings() {
       target.matches('input, select, textarea')
     ) {
       saveStyleSettings();
-      updateCitation(currentMetadataGlobal);
+      fillCitation(currentMetadataGlobal);
     }
   });
 }
@@ -538,7 +542,7 @@ function getCombinedCitation(meta, style) {
 }
 
 // 인용 2: 탭1 우측 textarea에 조합된 citation을 삽입 -> 이벤트 리스너가 있는 다른 함수에서 호출
-function updateCitation(meta) {
+function fillCitation(meta) {
   const textarea = document.querySelector('.citation-input');
   if (
     !meta ||
@@ -698,7 +702,7 @@ function renderHistory() {
     table.style.width = '100%';
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['저자','제목','학술DB','검색 일시'].forEach(text => {
+    ['저자','제목','학술DB','추출 일시'].forEach(text => {
       const th = document.createElement('th');
       th.textContent = text;
       th.style.border = 'none';
@@ -718,7 +722,7 @@ function renderHistory() {
     history.forEach(item => {
       const tr = document.createElement('tr');
       tr.style.border = 'none';
-      // 저자 표시: 3명 이상일 때 처음 2명 + ' 외'
+      // 저자 표시 규칙 설정: 3명 이상일 때 처음 2명 + ' 외'
       const authorsArray = Array.isArray(item.metadata.authors) ? item.metadata.authors : item.metadata.authors ? [item.metadata.authors] : [];
       let authorText = '';
       if (authorsArray.length >= 3) {
@@ -726,15 +730,17 @@ function renderHistory() {
       } else {
         authorText = authorsArray.join(', ');
       }
-      // 제목 표시: 공백 포함 최대 32자, 넘으면 '…' 추가
+      // 제목 표시 규칙 설정: 본제목만 가져옴, 공백 포함 최대 32자, 넘으면 '…' 추가
       const rawTitle = item.metadata.title_main || '';
       const titleText = rawTitle.length > 30
         ? rawTitle.slice(0, 32) + '…'
         : rawTitle;
+
       ['author', 'title', 'db', 'time'].forEach((_, idx) => {
         const td = document.createElement('td');
         td.style.border = 'none';
         td.style.padding = '4px';
+        // 제1열: 저자
         if (idx === 0) {
           td.textContent = authorText;
           td.title = Array.isArray(item.metadata.authors) //툴팁(기본)
@@ -747,21 +753,40 @@ function renderHistory() {
             const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
             if (tab1Btn) tab1Btn.click();
             currentMetadataGlobal = item.metadata;
-            fillMetadataField(item.metadata);
-            updateCitation(item.metadata);
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampGlobal = item.timestamp;
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
+            fillCitation(currentMetadataGlobal);
           });
+        // 제2열: 제목
         } else if (idx === 1) {
           td.textContent = titleText;
           td.title = rawTitle; //툴팁(기본)
           td.dataset.tooltip = rawTitle;
+          // 클릭 시 탭1으로 전환 후 데이터 채우기
           td.style.cursor = 'pointer';
           td.addEventListener('click', () => {
             const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
             if (tab1Btn) tab1Btn.click();
             currentMetadataGlobal = item.metadata;
-            fillMetadataField(item.metadata);
-            updateCitation(item.metadata);
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampGlobal = item.timestamp;
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
+            fillCitation(currentMetadataGlobal);
           });
+        // 제3열: 학술DB
         } else if (idx === 2) {
           const a = document.createElement('a');
           a.href = item.url;
@@ -769,6 +794,7 @@ function renderHistory() {
           a.target = '_blank';
           a.title = '검색 결과 페이지 바로가기'; //툴팁(기본)
           td.appendChild(a);
+        //제 4열: 추출 일시
         } else if (idx === 3) {
           // 분 단위까지만 표시 (초 단위 제거)
           td.textContent = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
@@ -834,7 +860,7 @@ function downloadHistory() {
           '끝 페이지': item.metadata.page_last || '',
           '키워드': Array.isArray(item.metadata.keywords) ? item.metadata.keywords.join(', ') : (item.metadata.keywords || ''),
           '국문 초록': item.metadata.abstract || '',
-          '조합된 서지사항': getCombinedCitation(item.metadata, getStyleSettings()),
+          '조합된 인용 표기': getCombinedCitation(item.metadata, getStyleSettings()),
           '검색한 학술 DB': item.academicDB,
           'URL': item.url,
           '검색(추출) 일시': item.timestamp
@@ -854,7 +880,7 @@ function downloadHistory() {
           { wch: 7 }, // 마지막 페이지
           { wch: 35 }, // 키워드
           { wch: 35 }, // 국문 초록
-          { wch: 100 }, // 조합된 서지사항
+          { wch: 100 }, // 조합된 인용 표기
           { wch: 13 }, // 검색한 학술 DB
           { wch: 7 }, // URL
           { wch: 15 }  // 검색(추출) 일시
@@ -903,13 +929,16 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreStyleSettings();
   // 2. 실행 시마다 pageInfo를 history에 저장
   requestPageInfo()
-    .then(pageInfo => savePageInfoToHistory(pageInfo))
+    .then(pageInfo => {
+      savePageInfoToHistory(pageInfo)
+      currentTimestampGlobal = pageInfo.timestamp
+    })
     .catch(err => console.log('히스토리 저장 실패.', err));
-  // 3. 메타데이터 불러오고, 탭1의 각 필드에 넣기. 직접 수정 발생 시 이를 업데이트하기.
+  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기. | 조합된 인용 표기에 
   fetchCurrentMetadata()
     .then(currentMetadata => {
       currentMetadataGlobal = currentMetadata || {};
-      updateCitation(currentMetadataGlobal);
+      fillCitation(currentMetadataGlobal);
     })
     .catch(err => {
       console.log(err);
