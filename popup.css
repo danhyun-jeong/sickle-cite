@@ -1,0 +1,415 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable.css');
+:root {
+    --accent: #5174a5;
+    --bg: #ffffff;
+    --bg-alt: #f8f9fa;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --border: #cfd1d6;
+    --radius: 6px;
+    --spacing: 12px;
+    --font: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+body {
+    margin: 0;
+    padding: var(--spacing);
+    width: 650px;
+    background: var(--bg-alt);
+    font-family: var(--font);
+    color: var(--text);
+    box-sizing: border-box;
+}
+input, textarea, select, button {
+    font-family: var(--font);
+}
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin: 0 -var(--spacing) var(--spacing);
+}
+.tabs button {
+    flex: 1;
+    padding: var(--spacing) 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+.tabs button.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+    margin: -1px;
+    font-weight: 500;
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+.split {
+    display: flex;
+    gap: var(--spacing);
+    height: 450px;
+}
+.pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin-top: var(--spacing);
+    padding: var(--spacing);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-y: auto;
+}
+.citation-input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    resize: none;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+.divider {
+    width: 1px;
+    background: var(--border);
+}
+#tab1 .left-pane .field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+#tab1 .left-pane .field label {
+    margin-bottom: 0;
+    margin-right: 8px;
+    white-space: nowrap;
+    width: 55px;
+    flex-shrink: 0;
+    color: var(--text);
+}
+#tab1 .left-pane .field input,
+#tab1 .left-pane .field textarea {
+    flex: 1;
+    width: 100%;
+}
+#tab1 .left-pane .field textarea:not(.abstract-input) {
+    min-height: 27px;
+}
+.field label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+.field input,
+.field textarea {
+    padding: 4px;
+    font-size: 14px;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    resize: vertical;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* 모든 input 및 textarea focus 시 테두리 색상을 --accent로 통일 */
+input:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent) !important;
+}
+.field input:focus[name="prefix-제"] {
+    box-shadow: none;
+}
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: var(--spacing) 0 0 0;
+}
+.actions button {
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.actions button:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+#tab1 h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 5px;
+    margin-bottom: 16px;
+}
+
+#tab1 .pane h3 {
+    text-align: center;
+}
+
+#tab1 .actions {
+    justify-content: center;
+    gap: var(--spacing);
+}
+#tab3 h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: calc(var(--spacing)*2);
+    margin-bottom: calc(var(--spacing)*1.2);
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+table th,
+table td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+}
+.search-box input {
+    margin-top: var(--spacing);
+    margin-bottom: var(--spacing);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+    width: 97%;
+    font-size: 14px;
+}
+#tab1 .left-pane {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#tab1 .left-pane .metadata-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: calc(var(--spacing) * 3.5);
+}
+#tab1 .left-pane .actions {
+    position: absolute;
+    bottom: var(--spacing);
+    left: var(--spacing);
+    right: var(--spacing);
+    background: var(--bg);
+}
+#tab1 .left-pane .metadata-container .field:first-child {
+    margin-top: 0;
+}
+#tab1 .right-pane .instructions p {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding-left: 16px;
+    text-indent: -16px;
+}
+#tab3 .section {
+    padding-bottom: calc(var(--spacing)/2);
+}
+#tab3 #vol-iss-options p {
+    margin-top:12px; 
+    margin-bottom: 4px;
+    margin-left: 3px;
+    color: var(--text-secondary);
+    font-size:13px; 
+}
+#tab3 .field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 9px;
+    margin-left: 3px;
+}
+#tab3 .field label {
+    margin-bottom: 0;
+    margin-right: 8px;
+    white-space: nowrap;
+    width: 155x;
+    flex-shrink: 0;
+}
+#tab3 .field input,
+#tab3 .field textarea,
+#tab3 .field select {
+    flex: 1;
+}
+#tab3 #vol-iss-options .field input {
+    flex: none;
+    width: 55px;
+}
+#tab3 #vol-iss-options .field input[type="checkbox"] {
+    width: 30px;
+}
+
+#tab3 select,
+#tab3 .section textarea {
+    padding: 4px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-sizing: border-box;
+    resize: vertical;
+}
+#tab3 .section textarea {
+    width: 100%;
+}
+
+#tab3 .section:nth-of-type(3) > label {
+    display: block;
+}
+
+.inline-group label {
+    margin-right: calc(var(--spacing)*2);
+}
+
+.tab-content.active {
+    padding-top: 15px;
+    padding-right: 15px;
+    padding-left: 15px;
+    padding-bottom: 10px;
+}
+
+#tab3 .section:nth-of-type(3) > label {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+input[name="title-brackets"], input[name="journal-brackets"] {
+    margin-right: 10px;
+}
+
+#tab3 label {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+#tab2 table {
+    table-layout: fixed;  /* 고정 레이아웃 모드 */
+    width: 100%;          /* 전체 너비를 차지 */
+}
+#tab2 th:nth-child(1),
+#tab2 td:nth-child(1) { width: 15%; }   /* 첫 번째 열 너비 */
+#tab2 th:nth-child(2),
+#tab2 td:nth-child(2) { width: 50%; }   /* 두 번째 열 너비 */
+#tab2 th:nth-child(3),
+#tab2 td:nth-child(3) { width: 10%; }   /* 세 번째 열 너비 */
+#tab2 th:nth-child(4),
+#tab2 td:nth-child(4) { width: 12%; }   /* 네 번째 열 너비 */
+#tab2 th:nth-child(5),
+#tab2 td:nth-child(5) { width: 4%; }   /* 네 번째 열 너비 */
+
+#tab2 td:nth-child(3) a {
+    color: var(--accent);
+}
+#tab2 td:nth-child(4) {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+#tab2 .checkbox-area {
+    padding-top: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+#tab2 .checkbox-area input,
+#tab2 .checkbox-area label {
+    margin-right: 9px;
+    vertical-align: middle;
+}
+#tab2 .checkbox-area button {
+    justify-content: flex-start;
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+#tab2 .checkbox-area button:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+.modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2000;
+}
+.modal.hidden { display: none; }
+.modal-content {
+background: #fff; padding: 15px; border-radius: 8px;
+text-align: center;
+}
+.modal-content p {
+    margin-bottom: 15px;
+}
+.modal-content button {
+    justify-content: flex-start;
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    margin: 0 8px;
+}
+.modal-content button:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+/* 탭2 히스토리 테이블 헤더 고정 */
+#tab2 table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-alt);
+  z-index: 2;
+}
+#tab3 .instructions p {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* 스크롤바를 10px 오른쪽으로 당기는 방법 */
+.search-box {
+    padding-right: 10px;
+}
+#history-list {
+    padding-right: 10px;
+}
+.checkbox-area {
+    padding-right: 10px;
+}
+.tab-content.active {
+    padding-right: 5px !important;
+}

@@ -1,0 +1,47 @@
+{
+    "manifest_version": 3,
+    "name": "Sickle-Cite BETA",
+    "version": "1.4.1",
+    "icons": {
+      "128": "icons/icon128.png"
+    },
+    "description": "THIS EXTENSION IS FOR BETA TESTING 국내 인문학 분야의 관습적 인용 양식을 지원하는, 한국어 논문에 최적화된 서지사항 메타데이터 추출기 겸 인용 양식 생성기입니다.",
+    "permissions": [
+      "storage",
+      "activeTab",
+      "scripting",
+      "commands"
+    ],
+    "web_accessible_resources": [
+    {
+      "resources": ["xlsx.full.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "commands":{
+      "open-extension-popup": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+K",
+          "mac": "Command+Shift+K"
+        },
+        "description": "현재 페이지에서 실행(= 팝업 창 열기 = 현재 페이지에서 논문 서지사항 추출)하기"
+      }
+    },
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "128": "icons/icon128.png"
+      }
+    },
+    "host_permissions": [
+      "https://*.riss.kr/search/detail/DetailView.do*",
+      "https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView*",
+      "https://*.kiss.kstudy.com/Detail*/Ar*",
+      "https://*.dbpia.com/journal/articleDetail*",
+      "https://*.earticle.net/Article/*",
+      "https://*.scholar.kyobobook.co.kr/article/detail/*"
+    ]
+}

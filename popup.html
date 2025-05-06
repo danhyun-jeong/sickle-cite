@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Sickle-Cite Popup</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab1">📑 현재 페이지 서지정보</button>
+    <button class="tab-btn" data-tab="tab2">🕰️ 서지정보 추출 내역</button>
+    <button class="tab-btn" data-tab="tab3">⚙️ 설정</button>
+  </div>
+
+  <!-- Tab 1 -->
+  <div id="tab1" class="tab-content active">
+    <div class="split">
+      <div class="pane left-pane">
+        <h3>🏷️ 논문 서지정보</h3>
+        <div class="metadata-container">
+        <div class="field"><label>저자</label><input type="text" name="authors" /></div>
+        <div class="field"><label>본제목</label><textarea rows="1" name="title_main" style="resize: vertical;"></textarea></div>
+        <div class="field"><label>부제목</label><textarea rows="1" name="title_sub" style="resize: vertical;"></textarea></div>
+        <div class="field"><label>학술지명</label><input type="text" name="journal_name" /></div>
+        <div class="field"><label>권수</label><input type="text" name="volume" /></div>
+        <div class="field"><label>호수</label><input type="text" name="issue" /></div>
+        <div class="field"><label>발간기관</label><input type="text" name="publisher" /></div>
+        <div class="field"><label>연도</label><input type="text" name="year" /></div>
+        <div class="field"><label>첫 페이지</label><input type="text" name="page_first" /></div>
+        <div class="field"><label>끝 페이지</label><input type="text" name="page_last" /></div>
+        <div class="field"><label>키워드</label><textarea rows="1" name="keywords" style="resize: vertical;"></textarea></div>
+        <div class="field">
+          <label>국문 초록</label>
+          <textarea class="abstract-input" name="abstract" rows="3"></textarea>
+        </div>
+        </div> <!-- end metadata-container -->
+        <div class="actions">
+          <button id="copy-metadata-btn">텍스트로 복사</button>
+          <button id="copy-yaml-btn" title="Obsidian 앱과의 호환을 위한 옵션입니다. Frontmatter를 만들어줍니다.">YAML로 복사</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="pane right-pane">
+        <h3>📝 조합된 서지사항(인용)</h3>
+        <textarea class="citation-input" placeholder=""></textarea>
+        <div class="instructions">
+          <p>💁 왼쪽의 〈논문 서지정보〉 필드에서 직접 수정하면, 위의 〈조합된 서지사항(인용)〉에도 반영됩니다.</p>
+          <p>💁 위의 〈조합된 서지사항(인용)〉 필드에서도 직접 수정이 가능합니다.</p>
+        </div>
+        <div class="actions">
+          <!-- <button id="edit-style-btn">인용 양식 수정</button> -->
+          <button id="copy-citation-btn" title="이 버튼을 누르신 후 원하는 곳에서 붙여넣기(Ctrl+V)하시면 됩니다">클립보드에 복사</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2 -->
+  <div id="tab2" class="tab-content">
+    <div class="search-box"><input id="search-history" type="text" placeholder="내역 검색"/></div>
+    <div id="history-list" style="height:350px; overflow-y:auto;"></div>
+    <div class="checkbox-area">
+      <button id="delete-history-all" type="button">내역 전체 삭제</button>
+      <button id="download-history" type="button">서지정보 내역을 엑셀로 다운로드</button>
+      <label><input id="deduplicate" type="checkbox" checked>같은 논문이 중복될 경우 첫 번째만 표시</label>
+    </div>
+  </div>
+
+  <!-- Tab 3 -->
+  <div id="tab3" class="tab-content">
+    <!-- (1) 제목과 부제목 사이 구분 기호 설정 -->
+    <div class="section">
+      <h3>제목과 부제목 사이 구분 기호</h3>
+      <div class="inline-group">
+        <label title="줄표로 쓰이는 기호는 em-dash입니다. 엉뚱한 기호를 대충 비슷하게 생겼다고 막 갖다 쓰지 맙시다."><input type="radio" name="title-sep-option" value="dash-space" checked> 줄표(대시), 앞뒤 간격 있음 ( — )</label>
+        <label title="백번 양보해도, 줄표 들어갈 장리에 하이픈(-)을 쓰는 일만은 없도록 하십시다. 그건 의미도 달라져 버립니다."><input type="radio" name="title-sep-option" value="dash-nospace"> 줄표(대시), 앞뒤 간격 없음 (—)</label>
+        <label title="콜론은 원래 앞에는 붙이고 뒤에는 뛰어 쓰는 것이 맞습니다."><input type="radio" name="title-sep-option" value="colon"> 콜론 (: )</label>
+      </div>
+    </div>
+    <!-- (2) 권호수 표기 방식 설정 -->
+    <div class="section">
+      <h3>권호수 표기 방식</h3>
+      <select id="vol-iss-style" name="vol-iss-style">
+        <option value="none">권호수 단위 없는 표기법 — 예: 57(2)</option>
+        <option value="suffix">권호수 단위 있는 표기법 — 예: 57권 2호</option>
+        <option value="prefix">권호수 접두사만 있는 표기법 — 예: Vol.57 No.2</option>
+      </select>
+      <div id="vol-iss-options">
+        <!-- dynamic additional settings go here -->
+      </div>
+    </div>
+    <!-- (3) 제목 기호 설정 -->
+    <div class="section">
+      <h3>제목 기호</h3>
+      <label title="키보드 자판에 있는 것(< >)은 부등호이지 화살괄호가 아닙니다. 그걸 괄호처럼 쓰시면 안 됩니다."><input type="checkbox" name="title-brackets">  홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</label><br>
+      <label title="겹화살괄호 들어갈 자리에 부등호 두 개(<< >>)를 쓰시는 분은 안 계시죠?"><input type="checkbox" name="journal-brackets">  겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</label>
+    </div>
+    <div class="section">
+      <h3>단축키</h3>
+      <div class="instructions">
+        <p>💡 단축키를 눌러 본 확장 프로그램을 실행(= 팝업 창 열기 = 현재 페이지에서 논문 서지정보를 추출)할 수 있습니다.</p>
+        <p>💡 기본(디폴트) 설정된 단축키는 Windows의 경우 Ctrl+Shift+K, macOS의 경우 Cmd+Shift+K입니다.</p>
+        <p>💡 단축키는 사용자가 원하는 대로 바꿀 수 있습니다. 크롬 → ⠇ → 확장 프로그램 → 확장 프로그램 관리 → 단축키 </p>
+      </div>
+    </div>
+  </div>
+  <div id="custom-tooltip" class="hidden"></div>
+  <!-- 모달 -->
+  <div id="delete-confirm" class="modal hidden">
+    <div class="modal-content">
+      <p>지금까지 저장된 논문 서지정보 추출 내역이 전부 삭제됩니다.<br>진행하시겠습니까?</p>
+      <button id="confirm-yes">예</button>
+      <button id="confirm-no">아니요</button>
+    </div>
+  </div>
+  <script src="/xlsx_module/xlsx.full.min.js"></script> <!--  Uses SheetJS js xlsx under Apache-2.0 -->
+  <script src="popup.js"></script>
+</body>
+</html>
