@@ -26,14 +26,16 @@ function collapse(s) { return s.replace(/\s+/g, ' ').trim(); }
 function fixTypography(text) {
   let s = text.trim();
   s = s.replace(/`([^`]+)`/g, '‘$1’');
+  s = s.replace(/′([^`]+)′/g, '‘$1’');
   s = s.replace(/'([^']+)'/g, '‘$1’');
   s = s.replace(/"([^\"]+)"/g, '“$1”');
+  s = s.replace(/″([^\"]+)″/g, '“$1”');
   s = s.replace(/</g, '〈').replace(/>/g, '〉');
   s = s.replace(/｢/g, '「').replace(/｣/g, '」');
   s = s.replace(/<</g, '《').replace(/>>/g, '》');
   s = s.replace(/≪/g, '《').replace(/≫/g, '》');
   s = s.replace(/\.{3}/g, '…');
-  s = s.replace(/[•ㆍᆞ・･‧]/g, '·');
+  s = s.replace(/[•ㆍᆞ・･‧⋅]/g, '·');
   s = s.replace(/[᠆‐‑⁃⁻₋﹣]/g, '-');
   s = s.replace(/[－―̶⸺⸻─━]/g, '—');
   return s;
