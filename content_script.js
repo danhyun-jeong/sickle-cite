@@ -57,12 +57,12 @@ function splitTitle(raw) {
   // 우선순위별 구분 기호 목록
   const delims = [':', '—', '–', raw.includes(' - ') ? ' - ' : '-'];
 
-  // 따옴표 범위 계산
-  const openFull  = raw.indexOf('『'), closeFull  = raw.indexOf('』');
-  const openAngle = raw.indexOf('「'), closeAngle = raw.indexOf('」');
+  // 낫표 범위 계산
+  const openDouble  = raw.indexOf('『'), closeDouble  = raw.indexOf('』');
+  const openSingle = raw.indexOf('「'), closeSingle = raw.indexOf('」');
   const ranges = [];
-  if (openFull >= 0 && closeFull > openFull) ranges.push([openFull, closeFull]);
-  if (openAngle >= 0 && closeAngle > openAngle) ranges.push([openAngle, closeAngle]);
+  if (openDouble >= 0 && closeDouble > openDouble) ranges.push([openDouble, closeDouble]);
+  if (openSingle >= 0 && closeSingle > openSingle) ranges.push([openSingle, closeSingle]);
 
   // 유효한 분리 위치 찾기
   let chosen = null, chosenLen = 1;
@@ -72,9 +72,18 @@ function splitTitle(raw) {
     while (true) {
       const pos = raw.indexOf(d, idx);
       if (pos < 0) break;
-      // 이 위치가 따옴표 내부인지 검사
+      // 이 위치가 낫표 내부인지 검사
       const inside = ranges.some(([s, e]) => pos > s && pos < e);
-      if (!inside) { chosen = pos; chosenLen = d.length; break; }
+      if (!inside) {
+        // 숫자 사이의 하이픈(-)은 구분자로 사용하지 않음
+        if (d === '-' && /\d/.test(raw.charAt(pos - 1)) && /\d/.test(raw.charAt(pos + 1))) {
+          idx = pos + d.length;
+          continue;
+        }
+        chosen = pos;
+        chosenLen = d.length;
+        break;
+      }
       idx = pos + d.length;
     }
     if (chosen !== null) break;
