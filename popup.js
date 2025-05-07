@@ -484,7 +484,8 @@ function resaveChangedStyleSettings() {
       target.matches('input, select, textarea')
     ) {
       saveStyleSettings();
-      fillCitation(currentMetadataGlobal);
+      fillCitation(currentMetadataGlobal); // 탭 1에서는 조합된 인용 표기를 갱신
+      renderHistory(); // 탭 2에서는 내역 표를 갱신(툴팁에 제목 구분자가 들어가기 때문)
     }
   });
 }
@@ -747,8 +748,13 @@ function renderHistory() {
       } else {
         authorText = authorsArray.join(', ');
       }
+      // 제목 정보 불러오기
+      const rawTitle = item.metadata.title_main || ''; // 표에서는 이것만 씀
+      const rawTitleSub = item.metadata.title_sub || '';
+      const styleSettings = getStyleSettings();
+      const checkedSeparator = item.metadata.title_sub ? styleSettings.titleSeparator : '';
+      const fullTitle = `${rawTitle}${checkedSeparator}${rawTitleSub}`; // 툴팁용
       // 제목 표시 규칙 설정: 본제목만 가져옴, 공백 포함 최대 32자, 넘으면 '…' 추가
-      const rawTitle = item.metadata.title_main || '';
       const titleText = rawTitle.length > 30
         ? rawTitle.slice(0, 32) + '…'
         : rawTitle;
@@ -784,7 +790,7 @@ function renderHistory() {
         // 제2열: 제목
         } else if (idx === 1) {
           td.textContent = titleText;
-          td.title = rawTitle; //툴팁(기본)
+          td.title = fullTitle; //툴팁(기본) 툴팁에서는 전체 제목을 보여줌
           td.dataset.tooltip = rawTitle;
           // 클릭 시 탭1으로 전환 후 데이터 채우기
           td.style.cursor = 'pointer';
