@@ -41,6 +41,7 @@
       "https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView*",
       "https://*.kiss.kstudy.com/Detail*/Ar*",
       "https://*.dbpia.com/journal/articleDetail*",
+      "https://*.dbpia.com/journal/detail*",
       "https://*.earticle.net/Article/*",
       "https://*.scholar.kyobobook.co.kr/article/detail/*"
     ]

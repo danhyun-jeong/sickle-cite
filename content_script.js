@@ -8,6 +8,8 @@ function getAcademicDBType() {
     return 'KISS';
   if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/articleDetail\?nodeId=/.test(url))
     return 'DBpia';
+  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/detail\?nodeId=/.test(url))
+    return 'DBpia';
   if (/^https:\/\/[^/]*earticle[^/]*net[^/]*\/Article\//.test(url))
     return 'eArticle';
   if (/^https:\/\/[^/]*scholar.kyobobook[^/]*\/article\/detail\//.test(url))
@@ -29,6 +31,7 @@ function fixTypography(text) {
   s = s.replace(/′([^`]+)′/g, '‘$1’');
   s = s.replace(/'([^']+)'/g, '‘$1’');
   s = s.replace(/"([^\"]+)"/g, '“$1”');
+  s = s.replace(/''([^\"]+)''/g, '“$1”');
   s = s.replace(/″([^\"]+)″/g, '“$1”');
   s = s.replace(/</g, '〈').replace(/>/g, '〉');
   s = s.replace(/｢/g, '「').replace(/｣/g, '」');
@@ -426,79 +429,195 @@ function parseKISS() {
 
 //----- DBpia 페이지 처리 함수: DBpia 사이트의 메타 태그에서 메타데이터 추출 -----
 function parseDBpia() {
-  const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
-  const cleanVal = key => collapse(fixTypography(meta(key)));
-  // 1) 저자(meta)
-  const authors = Array.from(document.querySelectorAll('meta[name="citation_author"]'))
-    .map(m => collapse(removeNonKoreanParen(fixTypography(m.getAttribute('content'))))) .filter(s => s);
-  // 2) 제목 분리(meta)
-  const rawTitle = cleanVal('citation_title');
-  const { main: title_main, sub: title_sub } = splitTitle(rawTitle);
-  // 3) 학술지명, 권, 호, 연도(meta)
-  const journal_name = collapse(removeNonKoreanParen(cleanVal('citation_journal_title')));
-  let volume = meta('citation_volume');
-  let issue = meta('citation_issue');
-  // 권호 정보가 메타에서 없을 경우 대체 파싱
-  if (!volume && !issue) {
-    const dt = Array.from(document.querySelectorAll('dt')).find(dt => dt.textContent.includes('저널정보'));
-    if (dt && dt.nextElementSibling) {
-      const aElem = Array.from(dt.nextElementSibling.querySelectorAll('a'))
-        .find(a => {
-          const oc = a.getAttribute('onclick') || '';
-          return /'type'\s*:\s*'권호'/.test(oc);
-        });
-      if (aElem) {
-        const oc = aElem.getAttribute('onclick') || '';
-        const m = oc.match(/'type_value'\s*:\s*'([^']+)'/);
-        const kv = m ? m[1] : '';
-        const nums = kv.match(/\d+/g) || [];
-        if (nums.length === 1) {
-          issue = nums[0];
-        } else if (nums.length >= 2) {
-          volume = nums[0];
-          issue = nums[1];
+  const url = window.location.href;
+  // 학위논문인 경우
+  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/detail\?nodeId=/.test(url)) {
+    const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
+    const cleanVal = key => collapse(fixTypography(meta(key)));
+
+    // 1) 저자 추출 (중복 및 숫자 제거)
+    const authors = Array.from(document.querySelectorAll('meta[name="citation_author"]'))
+      .map(m => {
+        const text = m.getAttribute('content') || '';
+        return collapse(removeNonKoreanParen(fixTypography(text)));
+      })
+      .filter(s => s && !/\d/.test(s));
+    const uniqueAuthors = [...new Set(authors)];
+
+    // 2) 제목 분리: 콜론 뒤에 문자열에 한글이 없으면 콜론 앞까지 취함
+    let rawTitle = cleanVal('citation_title');
+    const positions = [];
+    let idx = rawTitle.indexOf(':');
+    while (idx !== -1) {
+      positions.push(idx);
+      idx = rawTitle.indexOf(':', idx + 1);
+    }
+    for (const pos of positions) {
+      const rest = rawTitle.slice(pos + 1);
+      if (!/[가-힣]/.test(rest)) {
+        rawTitle = rawTitle.slice(0, pos);
+        break;
+      }
+    }
+    const { main: title_main, sub: title_sub } = splitTitle(rawTitle);
+
+    // 3) 키워드 추출
+    const keywords = meta('citation_keywords')
+      .split(/[;；,]/)
+      .map(s => collapse(fixTypography(s)))
+      .filter(s => s && (/[가-힣]/.test(s) || /^[A-Za-z]/.test(s)));
+
+    // 4) 초록
+    const abstract = cleanVal('citation_abstract');
+
+    // 5) 발행기관
+    let institute = cleanVal('citation_publisher');
+    if (institute.includes(' ')) {
+      const [pre, post] = institute.split(' ');
+      if ( post === '대학원' || post === '일반대학원') {
+        institute = pre;
+      }
+    }
+    institute = institute.replace(/[,]+$/, '');
+    // meta에서 institute 추출 실패 시 DOM에서 '저자정보' 하위 span 내용으로 대체
+    if (!institute) {
+      const dt = Array.from(document.querySelectorAll('dt')).find(el => el.textContent.includes('저자정보'));
+      if (dt && dt.nextElementSibling) {
+        const dd = dt.nextElementSibling;
+        const p = dd.querySelector('p');
+        if (p) {
+          const spans = p.querySelectorAll('span');
+          if (spans.length >= 2) {
+            const spanText = spans[1].textContent;
+            const m = spanText.match(/\(([^)]+)\)/);
+            if (m) {
+              let inner = m[1];
+              if (!inner.includes(',')) {
+                institute = inner.trim();
+              } else {
+                const [pre, post] = inner.split(',');
+                const postTrim = post.trim();
+                const tokens = postTrim.split(/\s+/);
+                const last = tokens[tokens.length - 1];
+                console.log(last);
+                if (last !== '대학원' && last !== '일반대학원') {
+                  institute = postTrim;
+                } else {
+                  institute = pre.trim();
+                }
+              }
+            }
+            institute = collapse(removeNonKoreanParen(institute));
+          }
         }
       }
     }
-  }
-  const year = (meta('citation_publication_date').match(/\d{4}/) || [''])[0];
-  // 4) 페이지(meta)
-  const page_first = meta('citation_firstpage');
-  const page_last = meta('citation_lastpage');
-  // 5) 키워드(meta)
-  const keywords = meta('citation_keywords')
-    .split(';')
-    .map(s => collapse(fixTypography(s)))
-    .filter(s => /[가-힣]/.test(s));
-  // 6) 초록(meta)
-  const abstract = cleanVal('citation_abstract');
-  // 7) 발행기관 추출: <dd class="dd text-depth"> 내 첫 번째 <a> onclick에서 'type_value'
-  let publisher = '';
-  const ddElem = document.querySelector('.dd.text-depth');
-  if (ddElem) {
-    const a = ddElem.querySelector('a[onclick*="type_value"]');
-    if (a) {
-      const onclick = a.getAttribute('onclick') || '';
-      const match = onclick.match(/'type_value'\s*:\s*'([^']+)'/);
-      if (match) publisher = collapse(removeNonKoreanParen(fixTypography(match[1])));
+    // 학위 논문 종류 감지
+    let thesisType = '';
+    const sliderImg = document.querySelector('.thesisDetail__upper__slider img');
+    if (sliderImg) {
+      const src = sliderImg.getAttribute('src') || '';
+      if (src.includes('master')) thesisType = '석사학위논문';
+      else if (src.includes('doctor')) thesisType = '박사학위논문';
     }
+    if (thesisType) {
+      publisher = `${institute} ${thesisType}`;
+    }
+
+    // 6) 연도
+    const year = meta('citation_publication_date') || '';
+
+    const rawMetadata = {
+      authors: uniqueAuthors.length === 1 ? uniqueAuthors[0] : uniqueAuthors,
+      title_main,
+      title_sub,
+      journal_name: '',
+      volume: '',
+      issue: '',
+      publisher,
+      year,
+      page_first: '',
+      page_last: '',
+      keywords,
+      abstract
+    };
+    return verifyMetadata(rawMetadata);
+  } // 그 외의 경우 (학술지 논문 등)
+  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/articleDetail\?nodeId=/.test(url)) {
+    const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
+    const cleanVal = key => collapse(fixTypography(meta(key)));
+    // 1) 저자(meta)
+    const authors = Array.from(document.querySelectorAll('meta[name="citation_author"]'))
+      .map(m => collapse(removeNonKoreanParen(fixTypography(m.getAttribute('content'))))) .filter(s => s);
+    // 2) 제목 분리(meta)
+    const rawTitle = cleanVal('citation_title');
+    const { main: title_main, sub: title_sub } = splitTitle(rawTitle);
+    // 3) 학술지명, 권, 호, 연도(meta)
+    const journal_name = collapse(removeNonKoreanParen(cleanVal('citation_journal_title')));
+    let volume = meta('citation_volume');
+    let issue = meta('citation_issue');
+    // 권호 정보가 메타에서 없을 경우 대체 파싱
+    if (!volume && !issue) {
+      const dt = Array.from(document.querySelectorAll('dt')).find(dt => dt.textContent.includes('저널정보'));
+      if (dt && dt.nextElementSibling) {
+        const aElem = Array.from(dt.nextElementSibling.querySelectorAll('a'))
+          .find(a => {
+            const oc = a.getAttribute('onclick') || '';
+            return /'type'\s*:\s*'권호'/.test(oc);
+          });
+        if (aElem) {
+          const oc = aElem.getAttribute('onclick') || '';
+          const m = oc.match(/'type_value'\s*:\s*'([^']+)'/);
+          const kv = m ? m[1] : '';
+          const nums = kv.match(/\d+/g) || [];
+          if (nums.length === 1) {
+            issue = nums[0];
+          } else if (nums.length >= 2) {
+            volume = nums[0];
+            issue = nums[1];
+          }
+        }
+      }
+    }
+    const year = (meta('citation_publication_date').match(/\d{4}/) || [''])[0];
+    // 4) 페이지(meta)
+    const page_first = meta('citation_firstpage');
+    const page_last = meta('citation_lastpage');
+    // 5) 키워드(meta)
+    const keywords = meta('citation_keywords')
+      .split(';')
+      .map(s => collapse(fixTypography(s)))
+      .filter(s => /[가-힣]/.test(s));
+    // 6) 초록(meta)
+    const abstract = cleanVal('citation_abstract');
+    // 7) 발행기관 추출: <dd class="dd text-depth"> 내 첫 번째 <a> onclick에서 'type_value'
+    let publisher = '';
+    const ddElem = document.querySelector('.dd.text-depth');
+    if (ddElem) {
+      const a = ddElem.querySelector('a[onclick*="type_value"]');
+      if (a) {
+        const onclick = a.getAttribute('onclick') || '';
+        const match = onclick.match(/'type_value'\s*:\s*'([^']+)'/);
+        if (match) publisher = collapse(removeNonKoreanParen(fixTypography(match[1])));
+      }
+    }
+    // 메타데이터 객체 생성
+    const rawMetadata = {
+      authors,
+      title_main,
+      title_sub,
+      journal_name,
+      volume,
+      issue,
+      publisher,
+      year,
+      page_first,
+      page_last,
+      keywords,
+      abstract
+    };
+    return verifyMetadata(rawMetadata);
   }
-  // 메타데이터 객체 생성
-  const rawMetadata = {
-    authors,
-    title_main,
-    title_sub,
-    journal_name,
-    volume,
-    issue,
-    publisher,
-    year,
-    page_first,
-    page_last,
-    keywords,
-    abstract
-  };
-  return verifyMetadata(rawMetadata);
 }
 
 //----- eArticle 페이지 처리 함수: eArticle 사이트의 메타 태그에서 메타데이터 추출 -----
