@@ -64,7 +64,7 @@ if (copyBtn) {
     const isEmpty = Object.values(currentMetadataGlobal)
       .every(v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0));
     if (isEmpty) {
-      showToastError('메타데이터가 없습니다');
+      showToastError('복사할 서지정보가 없습니다');
       return;
     }
     const citationText = document.querySelector('textarea.citation-input')?.value || '';
@@ -720,7 +720,7 @@ function renderHistory() {
     table.style.width = '100%';
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['저자','제목','학술DB','추출 일시'].forEach(text => {
+    ['저자','제목','학술 DB','추출 일시'].forEach(text => {
       const th = document.createElement('th');
       th.textContent = text;
       th.style.border = 'none';
@@ -809,7 +809,7 @@ function renderHistory() {
             updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
             fillCitation(currentMetadataGlobal);
           });
-        // 제3열: 학술DB
+        // 제3열: 학술 DB
         } else if (idx === 2) {
           const a = document.createElement('a');
           a.href = item.url;
