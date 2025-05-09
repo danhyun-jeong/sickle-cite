@@ -174,8 +174,9 @@ See [LICENSE](./LICENSE) for details.
 
 ### Credit
 
-- This extension uses [SheetJS js‑xlsx](https://www.npmjs.com/package/xlsx)
-  Licensed under the Apache License, Version 2.0
+- This extension uses [SheetJS js‑xlsx](https://www.npmjs.com/package/xlsx) Licensed under the Apache License, Version 2.0
+- I sincerely thank you for creating this wonderful library.
+
 
 SheetJS Community Edition -- https://sheetjs.com/
 
