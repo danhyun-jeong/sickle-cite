@@ -126,13 +126,15 @@ input, textarea, select, button {
 
 /* 모든 input 및 textarea focus 시 테두리 색상을 --accent로 통일 */
 input:focus,
-textarea:focus {
+textarea:focus,
+#vol-iss-style:focus {
     outline: none;
     border-color: var(--accent) !important;
 }
 .field input:focus[name="prefix-제"] {
     box-shadow: none;
 }
+
 .actions {
     display: flex;
     justify-content: flex-end;
@@ -173,8 +175,8 @@ textarea:focus {
     font-size: 18px;
     font-weight: 600;
     color: var(--text);
-    margin-top: calc(var(--spacing)*2);
     margin-bottom: calc(var(--spacing)*1.2);
+    margin-top: 0;
 }
 table {
     width: 100%;
@@ -227,6 +229,7 @@ table td {
     text-indent: -16px;
 }
 #tab3 .section {
+    margin-top: calc(var(--spacing)*2);
     padding-bottom: calc(var(--spacing)/2);
 }
 #tab3 #vol-iss-options p {
@@ -282,8 +285,20 @@ table td {
     display: block;
 }
 
+.inline-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    gap: 8px 16px;
+}
+
 .inline-group label {
-    margin-right: calc(var(--spacing)*2);
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-width: 150px;
 }
 
 .tab-content.active {
@@ -306,6 +321,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 #tab3 label {
     color: var(--text-secondary);
     font-size: 14px;
+    margin-bottom: 10px;
 }
 #tab2 table {
     table-layout: fixed;  /* 고정 레이아웃 모드 */
@@ -338,8 +354,13 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     color: var(--text-secondary);
 }
 
-#tab2 .checkbox-area input,
-#tab2 .checkbox-area label {
+#tab2 .checkbox-area .checkbox-label {
+    display: flex;
+    align-items: center;
+}
+
+#tab2 .checkbox-area input:not(.toggle-switch input),
+#tab2 .checkbox-area label:not(.checkbox-label) {
     margin-right: 9px;
     vertical-align: middle;
 }
@@ -422,4 +443,121 @@ text-align: center;
 }
 #tab3.tab-content.active #tab3-scroll-area {
   display: block;
+}
+
+/* 토글 스위치 스타일 */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 30px;
+    height: 16px;
+    vertical-align: middle;
+    margin-right: 10px;
+}
+
+#tab3 .toggle-switch {
+    margin-left: 3px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .3s;
+    border-radius: 16px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--accent);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(14px);
+}
+
+/* 기존 체크박스 라벨 스타일 유지 */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* 권호수 옵션 체크박스 레이아웃 조정 */
+#vol-iss-options .field .checkbox-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* 라디오 버튼 스타일 */
+input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    margin: 0 8px 0 0;
+    vertical-align: middle;
+    position: relative;
+    cursor: pointer;
+}
+
+input[type="radio"]:checked {
+    border-color: var(--accent);
+}
+
+input[type="radio"]::before {
+    content: "";
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.2s ease;
+}
+
+input[type="radio"]:checked::before {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+input[type="radio"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(81, 116, 165, 0.2);
+}
+
+/* 탭3의 inline-group 섹션에 대한 추가 여백 설정 */
+#tab3 .section:first-child {
+    margin-top: 12px;
 }

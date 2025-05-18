@@ -35,13 +35,20 @@ function updateVolIssOptions() {
     const val = volIssSelect.value;
     let html = '';
     if (val === 'none') {
-        html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
+        html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">💁 권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
     } else if (val === 'suffix') {
         html = `
         <div class="field"><label>권수 단위:</label><input type="text" name="volume-suffix" value="권"></div>
         <div class="field"><label>호수 단위:</label><input type="text" name="issue-suffix" value="호"></div>
         <div class="field"><label>구분 없을 시 단위:</label><input type="text" name="either-suffix" value="호"></div>
-        <div class="field"><label>권호수 앞에 접두사 "제" 붙이기</label><input type="checkbox" name="prefix-제" checked></div>
+        <div class="field">
+          <label class="checkbox-label">
+            <span class="toggle-switch">
+              <input type="checkbox" name="prefix-제" checked>
+              <span class="slider"></span>
+            </span>권호수 앞에 접두사 “제” 붙이기
+          </label>
+        </div>
         `;
     } else if (val === 'prefix') {
         html = `
@@ -756,7 +763,7 @@ function renderHistory() {
       const fullTitle = `${rawTitle}${checkedSeparator}${rawTitleSub}`; // 툴팁용
       // 제목 표시 규칙 설정: 본제목만 가져옴, 공백 포함 최대 32자, 넘으면 '…' 추가
       const titleText = rawTitle.length > 30
-        ? rawTitle.slice(0, 32) + '…'
+        ? rawTitle.slice(0, 30) + '…'
         : rawTitle;
 
       ['author', 'title', 'db', 'time'].forEach((_, idx) => {
