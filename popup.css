@@ -413,3 +413,13 @@ text-align: center;
 .tab-content.active {
     padding-right: 5px !important;
 }
+
+/* 탭3가 active일 때만 #tab3-scroll-area 보이게, 해당 영역만 스크롤 */
+#tab3-scroll-area {
+  display: none;
+  height: 459px; /* 필요시 조정, 탭3 내에서만 스크롤 */
+  overflow-y: auto;
+}
+#tab3.tab-content.active #tab3-scroll-area {
+  display: block;
+}

@@ -108,7 +108,7 @@ if (copyYamlBtn) {
       return;
     }
     const meta = currentMetadataGlobal;
-    // Prepare YAML author block
+    // author 부분
     let authorYaml;
     if (Array.isArray(meta.authors)) {
       if (meta.authors.length === 1) {
@@ -121,7 +121,7 @@ if (copyYamlBtn) {
     } else {
       authorYaml = `author: ${meta.authors || ''}`;
     }
-    // Prepare YAML keywords block
+    // keywords 부분
     let keywordsYaml;
     if (Array.isArray(meta.keywords)) {
       if (meta.keywords.length === 1) {
