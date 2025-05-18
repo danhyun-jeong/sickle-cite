@@ -46,7 +46,7 @@ function updateVolIssOptions() {
             <span class="toggle-switch">
               <input type="checkbox" name="prefix-제" checked>
               <span class="slider"></span>
-            </span>권호수 앞에 접두사 “제” 붙이기
+            </span>권호수 앞에 접두사 ‘제’ 붙이기
           </label>
         </div>
         `;
@@ -103,81 +103,100 @@ if (copyMetadataBtn) {
       .catch(err => console.error('메타데이터 복사 실패:', err));
   });
 }
-// 이벤트 리슨 동작 3. "YAML로 복사" 버튼 클릭 시 YAML 형식으로 메타데이터 및 인용 표기를 클립보드에 복사
+// 이벤트 리슨 동작 3. YAML 형식으로 메타데이터 및 인용 표기를 클립보드에 복사
+// 단축키(Ctrl+Shift+Y 또는 Cmd+Shift+Y) 이벤트 리스너
+document.addEventListener('keydown', (e) => {
+  // Ctrl+Shift+Y 또는 Cmd+Shift+Y (Mac)
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'y') {
+    e.preventDefault();
+    copyYamlToClipboard();
+  }
+});
+// 버튼 클릭 이벤트 리스너 (1.6.0 버전부터는 버튼 삭제)
 const copyYamlBtn = document.getElementById('copy-yaml-btn');
 if (copyYamlBtn) {
   copyYamlBtn.addEventListener('click', () => {
-    // 메타데이터 전체가 비어있으면 복사 취소 및 에러 토스트
-    const isEmpty = Object.values(currentMetadataGlobal)
-      .every(v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0));
-    if (isEmpty) {
-      showToastError('복사할 서지정보가 없습니다');
-      return;
-    }
-    const meta = currentMetadataGlobal;
-    // author 부분
-    let authorYaml;
-    if (Array.isArray(meta.authors)) {
-      if (meta.authors.length === 1) {
-        authorYaml = `author: ${meta.authors[0]}`;
-      } else if (meta.authors.length > 1) {
-        authorYaml = ['author:'].concat(meta.authors.map(name => `  - ${name}`)).join('\n');
-      } else {
-        authorYaml = 'author: ';
-      }
-    } else {
-      authorYaml = `author: ${meta.authors || ''}`;
-    }
-    // keywords 부분
-    let keywordsYaml;
-    if (Array.isArray(meta.keywords)) {
-      if (meta.keywords.length === 1) {
-        keywordsYaml = `keywords: ${meta.keywords[0]}`;
-      } else if (meta.keywords.length > 1) {
-        keywordsYaml = ['keywords:'].concat(meta.keywords.map(kw => `  - ${kw}`)).join('\n');
-      } else {
-        keywordsYaml = 'keywords: ';
-      }
-    } else {
-      keywordsYaml = `keywords: ${meta.keywords || ''}`;
-    }
-    const citation = getCombinedCitation(meta, getStyleSettings());
-    let volumeIssue = '';
-    if (meta.volume && meta.issue) {
-      volumeIssue = `${meta.volume}(${meta.issue})`;
-    } else if (meta.volume) {
-      volumeIssue = `"${meta.volume}"`;
-    } else if (meta.issue) {
-      volumeIssue = `"${meta.issue}"`;
-    } else {
-      volumeIssue = '';
-    }
-    const yamlText = [
-      '---',
-      authorYaml,
-      `title: ${meta.title_main}`,
-      `subtitle: ${meta.title_sub}`,
-      `journal: ${meta.journal_name}`,
-      `volume-issue: ${volumeIssue}`,
-      `publishing_society: ${meta.publisher}`,
-      `year: "${meta.year}"`,
-      `citation: ${citation}`,
-      keywordsYaml,
-      'PDF: ',
-      'tags: ',
-      'project: ',
-      'check: false',
-      '---',
-      `> [!abstract] 초록`,
-      `> ${meta.abstract}`
-    ].join('\n') + '\n\n';
-    navigator.clipboard.writeText(yamlText)
-      .then(() => {
-        console.log('서지정보(YAML)가 클립보드에 복사되었습니다:', yamlText);
-        showToast('서지정보(YAML)가 복사되었습니다');
-      })
-      .catch(err => console.error('YAML 복사 실패:', err));
+    copyYamlToClipboard();
   });
+}
+// YAML 형식으로 클립보드에 복사하는 함수
+function copyYamlToClipboard() {
+  // YAML 복사 버튼 함수 직접 실행
+  const meta = currentMetadataGlobal;
+  // 메타데이터 비어있는지 확인
+  const isEmpty = Object.values(meta)
+    .every(v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0));
+  if (isEmpty) {
+    showToastError('복사할 서지정보가 없습니다');
+    return;
+  }
+
+  // author 부분
+  let authorYaml;
+  if (Array.isArray(meta.authors)) {
+    if (meta.authors.length === 1) {
+      authorYaml = `author: ${meta.authors[0]}`;
+    } else if (meta.authors.length > 1) {
+      authorYaml = ['author:'].concat(meta.authors.map(name => `  - ${name}`)).join('\n');
+    } else {
+      authorYaml = 'author: ';
+    }
+  } else {
+    authorYaml = `author: ${meta.authors || ''}`;
+  }
+
+  // keywords 부분
+  let keywordsYaml;
+  if (Array.isArray(meta.keywords)) {
+    if (meta.keywords.length === 1) {
+      keywordsYaml = `keywords: ${meta.keywords[0]}`;
+    } else if (meta.keywords.length > 1) {
+      keywordsYaml = ['keywords:'].concat(meta.keywords.map(kw => `  - ${kw}`)).join('\n');
+    } else {
+      keywordsYaml = 'keywords: ';
+    }
+  } else {
+    keywordsYaml = `keywords: ${meta.keywords || ''}`;
+  }
+  
+  const citation = getCombinedCitation(meta, getStyleSettings());
+  let volumeIssue = '';
+  if (meta.volume && meta.issue) {
+    volumeIssue = `${meta.volume}(${meta.issue})`;
+  } else if (meta.volume) {
+    volumeIssue = `"${meta.volume}"`;
+  } else if (meta.issue) {
+    volumeIssue = `"${meta.issue}"`;
+  } else {
+    volumeIssue = '';
+  }
+  
+  const yamlText = [
+    '---',
+    authorYaml,
+    `title: ${meta.title_main}`,
+    `subtitle: ${meta.title_sub}`,
+    `journal: ${meta.journal_name}`,
+    `volume-issue: ${volumeIssue}`,
+    `publishing_society: ${meta.publisher}`,
+    `year: "${meta.year}"`,
+    `citation: ${citation}`,
+    keywordsYaml,
+    'PDF: ',
+    'tags: ',
+    'project: ',
+    'check: false',
+    '---',
+    `> [!abstract] 초록`,
+    `> ${meta.abstract}`
+  ].join('\n') + '\n\n';
+  
+  navigator.clipboard.writeText(yamlText)
+    .then(() => {
+      console.log('서지정보(YAML)가 클립보드에 복사되었습니다:', yamlText);
+      showToast('서지정보(YAML)가 클립보드에 복사되었습니다');
+    })
+    .catch(err => console.error('YAML 복사 실패:', err));
 }
 // 이벤트 리슨 동작 4. "내역에 수정사항 저장" 버튼 클릭 시 메타데이터를 내역에 저장
 // "내역에 수정사항 저장" 버튼 클릭 시, 현재 수정된 metadata를 history에 덮어쓰기
@@ -457,6 +476,13 @@ function getStyleSettings() {
     journalBracketRight = '』';
   }
 
+  // 쪽수 범위 표기 여부
+  const pageRangeInclude = document.querySelector('input[name="page-range-include"]')?.checked;
+  // 쪽수 범위 구분자
+  const pageRangeSeparator = document.querySelector('input[name="page-range-separator"]')?.value || '–';
+  // 쪽수 범위 단위
+  const pageRangeUnit = document.querySelector('input[name="page-range-unit"]')?.value || '쪽';
+
   return {
     titleSeparator,
     volumePrefix,
@@ -469,7 +495,10 @@ function getStyleSettings() {
     titleBracketLeft,
     titleBracketRight,
     journalBracketLeft,
-    journalBracketRight
+    journalBracketRight,
+    pageRangeInclude, // 유일하게 이것만 불리언
+    pageRangeSeparator,
+    pageRangeUnit
   };
 }
 
@@ -511,7 +540,10 @@ function restoreStyleSettings() {
     titleBracketLeft: '「',
     titleBracketRight: '」',
     journalBracketLeft: '『',
-    journalBracketRight: '』'
+    journalBracketRight: '』',
+    pageRangeInclude: false,
+    pageRangeSeparator: '–',
+    pageRangeUnit: '쪽'
   }, items => {
     // 제목 구분 기호 복원
     if (items.titleSeparator === ' — ') document.querySelector('input[name="title-sep-option"][value="dash-space"]').checked = true;
@@ -540,6 +572,10 @@ function restoreStyleSettings() {
     document.querySelector('input[name="title-brackets"]').checked = items.titleBracketLeft === '〈';
     // 겹낫표 복원
     document.querySelector('input[name="journal-brackets"]').checked = items.journalBracketLeft === '《';
+    // 쪽수 범위 표기 복원
+    document.querySelector('input[name="page-range-include"]').checked = items.pageRangeInclude;
+    document.querySelector('input[name="page-range-separator"]').value = items.pageRangeSeparator;
+    document.querySelector('input[name="page-range-unit"]').value = items.pageRangeUnit;
   });
 }
 
@@ -550,17 +586,23 @@ function getCombinedCitation(meta, style) {
   const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join('·') : meta.authors;
   const hasVol = meta.volume !== '';
   const hasIss = meta.issue !== '';
+  let pageRangePart = '';
+  if (style.pageRangeInclude) {
+    pageRangePart = `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
+  }
   let combinedCitation = '';
+  // 권수와 호수 둘 다 있을 경우
   if (hasVol && hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}, ${meta.publisher}, ${meta.year}.`;
+    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
+  // 권수와 호수 둘 중 하나만 있을 경우
   } else if (hasVol || hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}, ${meta.publisher}, ${meta.year}.`;
+    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
   } else {
     // 학술지명 값이 비어 있을 경우(학위논문일 경우 등) 학술지명 부분 전체를 제거 ("『』, "이 나타나지 않도록)
     if (!meta.journal_name) {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${meta.publisher}, ${meta.year}.`;
+      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
     } else {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}, ${meta.publisher}, ${meta.year}.`;
+      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
     }
   }
   return combinedCitation;
@@ -718,7 +760,7 @@ function renderHistory() {
     if (!container) return;
     container.innerHTML = '';
     container.style.position = 'relative';
-    container.style.maxHeight = '500px';   // 최대 높이를 600px로 제한
+    container.style.maxHeight = '500px';   // 최대 높이를 500px로 제한
     container.style.overflowY  = 'auto';   // 넘칠 때 세로 스크롤 활성화
     container.style.minHeight = '300px';   // 최소 높이
     container.style.paddingBottom = '20px';   // 체크박스 뒤로 내용이 스크롤되지 않도록 여유 공간 확보
@@ -952,7 +994,7 @@ document.getElementById('confirm-no').addEventListener('click', () => {
 
 // ** 실행 **
 
-// 팝업 DOM이 로드되는 것을 리슨하여,
+// DOM이 로드되는 것을 리슨하여,
 document.addEventListener('DOMContentLoaded', () => {
   // 1. 저장된 인용 양식 설정값을 불러와 탭3 재구성하기.
   restoreStyleSettings();
@@ -979,5 +1021,5 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHistory();
   reRenderHistoryCheck();
   reRenderHistorySearch();
-  downloadHistory()
+  downloadHistory();
 });

@@ -50,7 +50,7 @@
         </div>
         <div class="actions">
           <button id="copy-citation-btn" title="이 버튼을 누르신 후 원하는 곳에서 붙여넣기(Ctrl+V)하시면 됩니다">클립보드에 복사</button>
-          <button id="copy-yaml-btn" title="Obsidian 앱과의 호환을 위한 옵션입니다. Frontmatter를 만들어줍니다.">YAML로 복사</button>
+          <button id="copy-yaml-btn" style="display: none;" title="Obsidian 앱과의 호환을 위한 옵션입니다. Frontmatter를 만들어줍니다.">YAML로 복사</button>
         </div>
       </div>
     </div>
@@ -100,14 +100,14 @@
       <!-- (3) 제목 기호 설정 -->
       <div class="section">
         <h3>제목 기호</h3>
-        <label class="checkbox-label" title="키보드 자판에 있는 것(< >)은 부등호이지 화살괄호가 아닙니다. 그걸 괄호처럼 쓰시면 안 됩니다.">
+        <label class="checkbox-label" title="참고로, 키보드 자판에 있는 것(< >)은 엄밀히는 부등호이지 화살괄호가 아닙니다.">
           <span class="toggle-switch">
             <input type="checkbox" name="title-brackets">
             <span class="slider"></span>
           </span>
           <span class="toggle-text">홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</span>
         </label>
-        <label class="checkbox-label" title="겹화살괄호 들어갈 자리에 부등호 두 개(<< >>)를 쓰시는 분은 안 계시죠?">
+        <label class="checkbox-label">
           <span class="toggle-switch">
             <input type="checkbox" name="journal-brackets">
             <span class="slider"></span>
@@ -115,6 +115,20 @@
           <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
         </label>
       </div>
+      <!-- (4) 쪽수 범위 표기 여부 설정 -->
+      <div class="section">
+        <h3>쪽수 범위 표기 여부</h3>
+        <label class="checkbox-label">
+          <span class="toggle-switch">
+            <input type="checkbox" name="page-range-include">
+            <span class="slider"></span>
+          </span>
+          <span class="toggle-text">인용 표기에 쪽수 범위 포함하기</span>
+        </label>
+        <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
+        <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
+      </div>
+      <!-- (5) 단축키 설정 안내 -->
       <div class="section">
         <h3>단축키</h3>
         <div class="instructions">
