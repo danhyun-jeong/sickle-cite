@@ -64,11 +64,11 @@
       <button id="delete-history-all" type="button">내역 전체 삭제</button>
       <button id="download-history" type="button">서지정보 내역을 엑셀로 다운로드</button>
       <label class="checkbox-label" title="논문의 저자, 제목, 학술지명, 발간기관, 연도가 정확히 일치할 경우 같은 논문이라고 판단합니다">
+        <span class="toggle-text">같은 논문이 중복될 경우 첫 번째만 표시</span>
         <span class="toggle-switch">
           <input id="deduplicate" type="checkbox" checked>
           <span class="slider"></span>
         </span>
-        <span class="toggle-text">같은 논문이 중복될 경우 첫 번째만 표시</span>
       </label>
     </div>
   </div>
@@ -101,29 +101,29 @@
       <div class="section">
         <h3>제목 기호</h3>
         <label class="checkbox-label" title="참고로, 키보드 자판에 있는 것(< >)은 엄밀히는 부등호이지 화살괄호가 아닙니다.">
+          <span class="toggle-text">홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</span>
           <span class="toggle-switch">
             <input type="checkbox" name="title-brackets">
             <span class="slider"></span>
-          </span>
-          <span class="toggle-text">홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</span>
+          </span>          
         </label>
         <label class="checkbox-label">
+          <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
           <span class="toggle-switch">
             <input type="checkbox" name="journal-brackets">
             <span class="slider"></span>
           </span>
-          <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
         </label>
       </div>
       <!-- (4) 쪽수 범위 표기 여부 설정 -->
       <div class="section">
         <h3>쪽수 범위 표기 여부</h3>
         <label class="checkbox-label">
+          <span class="toggle-text">인용 표기에 쪽수 범위 포함하기</span>
           <span class="toggle-switch">
             <input type="checkbox" name="page-range-include">
             <span class="slider"></span>
           </span>
-          <span class="toggle-text">인용 표기에 쪽수 범위 포함하기</span>
         </label>
         <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
         <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>

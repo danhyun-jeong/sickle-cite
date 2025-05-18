@@ -43,10 +43,11 @@ function updateVolIssOptions() {
         <div class="field"><label>구분 없을 시 단위:</label><input type="text" name="either-suffix" value="호"></div>
         <div class="field">
           <label class="checkbox-label">
+            <span class="toggle-text">권호수 앞에 접두사 ‘제’ 붙이기</span>
             <span class="toggle-switch">
               <input type="checkbox" name="prefix-제" checked>
               <span class="slider"></span>
-            </span>권호수 앞에 접두사 ‘제’ 붙이기
+            </span>
           </label>
         </div>
         `;

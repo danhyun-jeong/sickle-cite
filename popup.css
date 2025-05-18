@@ -244,7 +244,6 @@ table td {
     flex-direction: row;
     align-items: center;
     margin-top: 9px;
-    margin-left: 3px;
 }
 #tab3 .field label {
     margin-bottom: 0;
@@ -256,7 +255,7 @@ table td {
 
 #tab3 #vol-iss-options .field input {
     flex: none;
-    width: 30px;
+    width: 40px;
 }
 #tab3 #vol-iss-options .field input[type="checkbox"] {
     width: 30px;
@@ -448,11 +447,7 @@ text-align: center;
     width: 30px;
     height: 16px;
     vertical-align: middle;
-    margin-right: 10px;
-}
-
-#tab3 .toggle-switch {
-    margin-left: 3px;
+    margin-left: 10px;
 }
 
 .toggle-switch input {
@@ -495,6 +490,10 @@ input:focus + .slider {
 
 input:checked + .slider:before {
     transform: translateX(14px);
+}
+
+#tab3 .toggle-text {
+    min-width: 200px;
 }
 
 /* 기존 체크박스 라벨 스타일 유지 */
