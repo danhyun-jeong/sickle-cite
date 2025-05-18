@@ -625,12 +625,12 @@ function fillCitation(meta) {
   if (textarea) textarea.value = combinedCitation;
 }
 
-// 히스토리 1: 저장된 히스토리에 pageInfo 추가
+// 히스토리 1: 히스토리에 pageInfo 추가(저장)
 function savePageInfoToHistory(pageInfo) {
   chrome.storage.local.get({ history: [] }, items => {
     const merged = items.history.concat(pageInfo);
-    // 메타데이터 깊은 비교 함수
-    function isSameMetadata(a, b) {
+    // 같은 논문인지 판별하는 함수
+    function isSameArticle(a, b) {
       const aKeys = Object.keys(a);
       const bKeys = Object.keys(b);
       if (aKeys.length !== bKeys.length) return false;
@@ -650,7 +650,7 @@ function savePageInfoToHistory(pageInfo) {
         u.academicDB === item.academicDB &&
         u.url === item.url &&
         u.timestamp === item.timestamp &&
-        isSameMetadata(u.metadata, item.metadata)
+        isSameArticle(u.metadata, item.metadata)
       );
       if (!exists) uniqueHistory.push(item);
     });
