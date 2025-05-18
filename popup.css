@@ -47,9 +47,7 @@ input, textarea, select, button {
 .tab-content {
     display: none;
 }
-.tab-content.active {
-    display: block;
-}
+
 .split {
     display: flex;
     gap: var(--spacing);
@@ -293,6 +291,7 @@ table td {
 }
 
 .tab-content.active {
+    display: block;
     padding-top: 15px;
     padding-right: 15px;
     padding-left: 15px;
@@ -422,7 +421,7 @@ text-align: center;
 .checkbox-area {
     padding-right: 10px;
 }
-.tab-content.active {
+#tab2.tab-content.active {
     padding-right: 5px !important;
 }
 
