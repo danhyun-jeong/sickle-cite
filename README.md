@@ -78,7 +78,7 @@ BETA 1.5.2 버전을 크롬 웹 스토어를 통해 브라우저에 바로 설�
 
 #### 탭 1. 현재 페이지 서지정보
 
-<p align="center"><img width="651" alt="Image" src="https://github.com/user-attachments/assets/a50f2dde-d01a-47e6-9703-c6377edf1012" /></p>
+<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/086cba0d-4a7f-4ada-98e4-82f095d97fab" /></p>
 
 - [📑 현재 페이지 서지정보] 탭이 눌려 있을 때 표시되는 화면의 좌측 〈🗂️ 논문 서지정보〉 부분에서는 논문의 서지정보(metadata)를 항목별로 볼 수 있으며, 우측 상단 〈📝 조합된 인용 표기〉 부분에서는 서지정보를 바탕으로 조합된 인용 표기(citation)를 확인할 수 있습니다.
 - 본 확장 프로그램을 실행하면, 즉 팝업 창을 열면 그것이 트리거가 되어 현재 페이지에서 논문의 서지정보를 추출하여 〈🗂️ 논문 서지정보〉의 각 필드와 〈📝 조합된 인용 표기〉의 필드를 채웁니다. 즉 ‘서지정보 추출하기’ 버튼 같은 것은 없습니다. 그냥 이 확장 프로그램을 실행하면 = 팝업 창을 열기만 하면 됩니다.
@@ -129,7 +129,7 @@ BETA 1.5.2 버전을 크롬 웹 스토어를 통해 브라우저에 바로 설�
 
 #### 탭 3. 설정
 
-<p align="center"><img width="651" alt="Image" src="https://github.com/user-attachments/assets/1a430f0c-392e-4dc4-8c36-45e28ff0087e" /></p>
+<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/7711d423-e905-4e55-b12c-f889d1ca9f69" /></p>
 
 - [⚙️ 설정] 탭에서는 인용 양식에서 일부 사항을 설정할 수 있습니다.
 - [⚙️ 설정] 탭에서 선택한 옵션은 [📑 현재 페이지 서지정보] 탭에서의 〈📝 조합된 인용 표기〉에뿐 아니라 다운로드되는 엑셀 파일에서의 ‘조합된 인용 표기’ 열에도 영향을 미칩니다.
@@ -191,7 +191,7 @@ BETA 1.5.2 버전을 크롬 웹 스토어를 통해 브라우저에 바로 설�
 
 여러 미흡한 점이 있음에도 불구하고, 이 프로그램이 너무나 마음에 드셨고 또 무료로 쓰기에 미안하다 하시면… 저한테 커피 한 잔 사주시면 됩니다.
 
-<a href="https://www.buymeacoffee.com/danhyun_jeong" target="_blank" align="center"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+<a href="https://www.buymeacoffee.com/danhyun_jeong" target="_blank" ><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 🤫 마지막으로 당부 말씀 드립니다. 제가 누군지 알 것 같으셔도 혼자서만 알고 계세요. 🤐
 
