@@ -14,6 +14,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.add('active');
       const tabId = btn.getAttribute('data-tab');
       document.getElementById(tabId).classList.add('active');
+      // 탭1로 전환 시 태그 불러오기 시도
+      if (tabId === 'tab1' && currentTimestampIdGlobal) {
+        loadProjectTags();
+      }
     });
 });
 
@@ -160,44 +164,62 @@ function copyYamlToClipboard() {
     keywordsYaml = `keywords: ${meta.keywords || ''}`;
   }
   
-  const citation = getCombinedCitation(meta, getStyleSettings());
-  let volumeIssue = '';
-  if (meta.volume && meta.issue) {
-    volumeIssue = `${meta.volume}(${meta.issue})`;
-  } else if (meta.volume) {
-    volumeIssue = `"${meta.volume}"`;
-  } else if (meta.issue) {
-    volumeIssue = `"${meta.issue}"`;
-  } else {
-    volumeIssue = '';
-  }
-  
-  const yamlText = [
-    '---',
-    authorYaml,
-    `title: ${meta.title_main}`,
-    `subtitle: ${meta.title_sub}`,
-    `journal: ${meta.journal_name}`,
-    `volume-issue: ${volumeIssue}`,
-    `publishing_society: ${meta.publisher}`,
-    `year: "${meta.year}"`,
-    `citation: ${citation}`,
-    keywordsYaml,
-    'PDF: ',
-    'tags: ',
-    'project: ',
-    'check: false',
-    '---',
-    `> [!abstract] 초록`,
-    `> ${meta.abstract}`
-  ].join('\n') + '\n\n';
-  
-  navigator.clipboard.writeText(yamlText)
-    .then(() => {
-      console.log('서지정보(YAML)가 클립보드에 복사되었습니다:', yamlText);
-      showToast('서지정보(YAML)가 클립보드에 복사되었습니다');
-    })
-    .catch(err => console.error('YAML 복사 실패:', err));
+  // projectTags 정보를 가져온 후 YAML 생성하여 클립보드에 복사
+  chrome.storage.local.get({ history: [] }, items => {
+    let projectTagsYaml = 'project: ';
+    
+    if (currentTimestampIdGlobal) {
+      const history = items.history;
+      const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
+      
+      if (item && item.projectTags && Array.isArray(item.projectTags) && item.projectTags.length > 0) {
+        if (item.projectTags.length === 1) {
+          projectTagsYaml = `project: ${item.projectTags[0]}`;
+        } else {
+          projectTagsYaml = ['project:'].concat(item.projectTags.map(tag => `  - ${tag}`)).join('\n');
+        }
+      }
+    }
+    
+    const citation = getCombinedCitation(meta, getStyleSettings());
+    let volumeIssue = '';
+    if (meta.volume && meta.issue) {
+      volumeIssue = `${meta.volume}(${meta.issue})`;
+    } else if (meta.volume) {
+      volumeIssue = `"${meta.volume}"`;
+    } else if (meta.issue) {
+      volumeIssue = `"${meta.issue}"`;
+    } else {
+      volumeIssue = '';
+    }
+    
+    const yamlText = [
+      '---',
+      authorYaml,
+      `title: ${meta.title_main}`,
+      `subtitle: ${meta.title_sub}`,
+      `journal: ${meta.journal_name}`,
+      `volume-issue: ${volumeIssue}`,
+      `publishing_society: ${meta.publisher}`,
+      `year: "${meta.year}"`,
+      `citation: ${citation}`,
+      keywordsYaml,
+      'PDF: ',
+      'tags: ',
+      projectTagsYaml,
+      'check: false',
+      '---',
+      `> [!abstract] 초록`,
+      `> ${meta.abstract}`
+    ].join('\n') + '\n\n';
+    
+    navigator.clipboard.writeText(yamlText)
+      .then(() => {
+        console.log('서지정보(YAML)가 클립보드에 복사되었습니다:', yamlText);
+        showToast('서지정보(YAML)가 클립보드에 복사되었습니다');
+      })
+      .catch(err => console.error('YAML 복사 실패:', err));
+  });
 }
 // 이벤트 리슨 동작 4. "내역에 수정사항 저장" 버튼 클릭 시 메타데이터를 내역에 저장
 // "내역에 수정사항 저장" 버튼 클릭 시, 현재 수정된 metadata를 history에 덮어쓰기
@@ -215,6 +237,42 @@ if (saveMetaBtn) {
         });
       } else {
         showToastError('저장된 내역을 찾을 수 없어 수정사항이 저장되지 못했습니다');
+      }
+    });
+  });
+}
+// 이벤트 리슨 동작 5. "태그 저장" 버튼 클릭 시 태그를 메타데이터에 추가하고 내역에 저장
+const saveTagsBtn = document.getElementById('save-tags-btn');
+if (saveTagsBtn) {
+  saveTagsBtn.addEventListener('click', () => {
+    // 태그 입력값 가져오기
+    const tagsInput = document.getElementById('tags-input');
+    const tagsText = tagsInput.value.trim();
+    
+    if (!tagsText) {
+      showToastError('저장할 태그가 없습니다');
+      return;
+    }
+    // 콤마로 구분된 태그를 배열로 변환
+    const tagsArray = tagsText.split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag !== '');
+    // 중복 제거
+    const uniqueTags = [...new Set(tagsArray)];
+    
+    // 내역에 저장 - history item에 직접 projectTags 속성으로 저장
+    chrome.storage.local.get({ history: [] }, items => {
+      const history = items.history;
+      const idx = history.findIndex(item => item.timestampId === currentTimestampIdGlobal);
+      if (idx >= 0) {
+        // metadata 객체에 저장하지 않고 item에 직접 저장
+        history[idx].projectTags = uniqueTags;
+        chrome.storage.local.set({ history }, () => {
+          showToast('프로젝트 태그가 내역에 저장되었습니다');
+          renderHistory();
+        });
+      } else {
+        showToastError('저장된 내역을 찾을 수 없어 태그가 저장되지 못했습니다');
       }
     });
   });
@@ -296,6 +354,33 @@ function getMetadataText(meta) {
   return lines.join('\n');
 }
 
+// 태그
+
+// 태그 입력 필드를 초기화하는 함수
+function clearTagsInput() {
+  const tagsInput = document.getElementById('tags-input');
+  if (tagsInput) {
+    tagsInput.value = '';
+  }
+}
+// 저장된 프로젝트 태그를 불러오는 함수
+function loadProjectTags() {
+  if (!currentTimestampIdGlobal) return;
+  // 먼저 태그 입력 필드 초기화
+  clearTagsInput();
+  chrome.storage.local.get({ history: [] }, items => {
+    const history = items.history;
+    const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
+    
+    if (item && item.projectTags && Array.isArray(item.projectTags)) {
+      const tagsInput = document.getElementById('tags-input');
+      if (tagsInput) {
+        tagsInput.value = item.projectTags.join(', ');
+      }
+    }
+  });
+}
+
 // 메타 1: PageInfo(Metadata + AcademicDB + URL + Timestamp + Timestamp ID) 요청
 async function requestPageInfo() {
   // 현재 활성 탭 정보 가져오기
@@ -332,7 +417,7 @@ async function requestPageInfo() {
   return pageInfo;
 }
 
-// 메타 2: 메타데이터를 탭1 좌측의 각 메타데이터 필드에 채우기 (추출된(받아온) 최초 메타데이터를 채우거나, 탭 2에서 클릭한 메타데이터를 채우거나)
+// 메타 2: 메타데이터를 탭1의 각 메타데이터 필드에 채우기 (추출된(받아온) 최초 메타데이터를 채우거나, 탭 2에서 클릭한 메타데이터를 채우거나)
 function fillMetadataField(meta) {
   // undefined인 메타데이터 속성은 빈 문자열로 대체
   Object.keys(meta).forEach(key => {
@@ -394,10 +479,25 @@ function updateCurrentMetadata(meta) {
     const el = document.querySelector(`#tab1 .left-pane [name="${key}"]`);
     if (!el) return;
     el.addEventListener('input', () => {
-      meta[key] = el.value;
-      console.log(`메타데이터 업데이트: ${key} =`, el.value)
+      // authors와 keywords는 콤마로 구분하여 배열로 저장
+      if (key === 'authors' || key === 'keywords') {
+        const inputValue = el.value.trim();
+        if (inputValue) {
+          // 콤마로 분리하고 각 항목의 앞뒤 공백 제거, 빈 항목 필터링
+          meta[key] = inputValue.split(',')
+            .map(item => item.trim())
+            .filter(item => item !== '');
+        } else {
+          meta[key] = [];
+        }
+      } else {
+        // 나머지 필드는 기존처럼 문자열로 저장
+        meta[key] = el.value;
+      }
+      
+      console.log(`메타데이터 업데이트: ${key} =`, meta[key]);
       console.log('업데이트 된 메타데이터는 다음과 같음:', getMetadataText(meta));
-      fillCitation(meta)
+      fillCitation(meta);
     });
   });
   return meta; // 이후에 이 결과는 fetchCurrentMetadata()를 거쳐 전역변수 currentMetadataGlobal에 저장될 것임
@@ -743,10 +843,10 @@ function renderHistory() {
     const terms = searchValue.split(/\s+/).filter(Boolean);
     const baseHistory = terms.length
       ? rawHistory.filter(item => {
-          const haystack = Object.values(item.metadata)
-            .flatMap(v => Array.isArray(v) ? v : [v])
-            .join(' ')
-            .toLowerCase();
+          // 메타데이터와 projectTags를 모두 검색 대상에 포함
+          const metaValues = Object.values(item.metadata).flatMap(v => Array.isArray(v) ? v : [v]);
+          const tagValues = Array.isArray(item.projectTags) ? item.projectTags : [];
+          const haystack = [...metaValues, ...tagValues].join(' ').toLowerCase();
           return terms.every(term => haystack.includes(term));
         })
       : rawHistory;
@@ -770,7 +870,7 @@ function renderHistory() {
     table.style.width = '100%';
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['저자','제목','학술 DB','추출 일시'].forEach(text => {
+    ['저자','논문 제목','태그','학술 DB','추출 일시'].forEach(text => {
       const th = document.createElement('th');
       th.textContent = text;
       th.style.border = 'none';
@@ -790,11 +890,11 @@ function renderHistory() {
     history.forEach(item => {
       const tr = document.createElement('tr');
       tr.style.border = 'none';
-      // 저자 표시 규칙 설정: 3명 이상일 때 처음 2명 + ' 외'
+      // 저자 표시 규칙 수정: 공저자일 때 처음 1명 + ' 외'
       const authorsArray = Array.isArray(item.metadata.authors) ? item.metadata.authors : item.metadata.authors ? [item.metadata.authors] : [];
       let authorText = '';
-      if (authorsArray.length >= 3) {
-        authorText = authorsArray.slice(0, 2).join(', ') + ' 외';
+      if (authorsArray.length >= 2) {
+        authorText = authorsArray[0] + ' 외';
       } else {
         authorText = authorsArray.join(', ');
       }
@@ -808,8 +908,17 @@ function renderHistory() {
       const titleText = rawTitle.length > 30
         ? rawTitle.slice(0, 30) + '…'
         : rawTitle;
-
-      ['author', 'title', 'db', 'time'].forEach((_, idx) => {
+      // 태그 정보 처리
+      const tagsArray = Array.isArray(item.projectTags) ? item.projectTags : [];
+      let tagText = '-';
+      if (tagsArray.length > 0) {
+        // 첫 번째 태그만 6글자까지 표시
+        tagText = tagsArray[0].length > 6 ? tagsArray[0].slice(0, 6) + '…' : tagsArray[0];
+        if (tagsArray.length > 1) {
+          tagText += ' +';  // 추가 태그가 있음을 표시
+        }
+      }
+      ['author', 'title', 'tag', 'db', 'time'].forEach((_, idx) => {
         const td = document.createElement('td');
         td.style.border = 'none';
         td.style.padding = '4px';
@@ -829,6 +938,7 @@ function renderHistory() {
             try {
               fillMetadataField(item.metadata);
               currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
             } catch (err) {
               console.error('fillMetadataField error:', err);
               showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
@@ -851,6 +961,7 @@ function renderHistory() {
             try {
               fillMetadataField(item.metadata);
               currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
             } catch (err) {
               console.error('fillMetadataField error:', err);
               showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
@@ -859,16 +970,40 @@ function renderHistory() {
             updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
             fillCitation(currentMetadataGlobal);
           });
-        // 제3열: 학술 DB
+        // 제3열: 태그
         } else if (idx === 2) {
+          td.textContent = tagText;
+          td.title = Array.isArray(item.projectTags) ? item.projectTags.join(', ') : ''; // 툴팁으로 전체 태그 표시
+          td.style.color = tagText ? 'var(--accent)' : 'var(--text-secondary)';
+          td.style.fontSize = '12px';
+          td.style.cursor = 'pointer';
+          // 클릭 시 탭1으로 전환 후 데이터 채우기 (다른 열과 동일한 동작)
+          td.addEventListener('click', () => {
+            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
+            if (tab1Btn) tab1Btn.click();
+            currentMetadataGlobal = item.metadata;
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal);
+            fillCitation(currentMetadataGlobal);
+          });
+        // 제4열: 학술 DB
+        } else if (idx === 3) {
           const a = document.createElement('a');
           a.href = item.url;
           a.textContent = item.academicDB;
           a.target = '_blank';
           a.title = '검색 결과 페이지 바로가기'; //툴팁(기본)
           td.appendChild(a);
-        //제 4열: 추출 일시
-        } else if (idx === 3) {
+        //제5열: 추출 일시
+        } else if (idx === 4) {
           // 분 단위까지만 표시 (초 단위 제거)
           td.textContent = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
         }
@@ -879,7 +1014,7 @@ function renderHistory() {
       tdDel.style.border = 'none';
       tdDel.style.padding = '4px';
       const btn = document.createElement('button');
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" alt="삭제" width="16" height="16" style="color: var(--text-secondary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" alt="삭제" width="14" height="14" style="color: var(--text-secondary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
       btn.style.border = 'none';
       btn.style.background = 'none';
       btn.style.cursor = 'pointer';
@@ -932,6 +1067,7 @@ function downloadHistory() {
           '첫 페이지': item.metadata.page_first || '',
           '끝 페이지': item.metadata.page_last || '',
           '키워드': Array.isArray(item.metadata.keywords) ? item.metadata.keywords.join(', ') : (item.metadata.keywords || ''),
+          '프로젝트 태그': Array.isArray(item.projectTags) ? item.projectTags.join(', ') : (item.projectTags || ''),
           '국문 초록': item.metadata.abstract || '',
           '조합된 인용 표기': getCombinedCitation(item.metadata, getStyleSettings()),
           '검색한 학술 DB': item.academicDB,
@@ -941,17 +1077,18 @@ function downloadHistory() {
         const ws = XLSX.utils.json_to_sheet(data);
         // 열 너비 설정 (wch: 문자 수 기반 너비)
         ws['!cols'] = [
-          { wch: 14 }, // 저자
+          { wch: 10 }, // 저자
           { wch: 35 }, // 본제목
           { wch: 35 }, // 부제목
-          { wch: 14 }, // 학술지명
+          { wch: 15 }, // 학술지명
           { wch: 5 }, // 권수
           { wch: 5 }, // 호수
-          { wch: 14 }, // 발행기관
+          { wch: 15 }, // 발행기관
           { wch: 5 }, // 연도
           { wch: 7 }, // 첫 페이지
           { wch: 7 }, // 마지막 페이지
           { wch: 35 }, // 키워드
+          { wch: 15 }, // 프로젝트 태그
           { wch: 35 }, // 국문 초록
           { wch: 100 }, // 조합된 인용 표기
           { wch: 13 }, // 검색한 학술 DB
@@ -1011,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(currentMetadata => {
       currentMetadataGlobal = currentMetadata || {};
       fillCitation(currentMetadataGlobal);
+      loadProjectTags();
     })
     .catch(err => {
       console.log(err);

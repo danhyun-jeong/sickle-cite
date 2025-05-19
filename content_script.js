@@ -12,7 +12,7 @@ function getAcademicDBType() {
     return 'DBpia';
   if (/^https:\/\/[^/]*earticle[^/]*net[^/]*\/Article\//.test(url))
     return 'eArticle';
-  if (/^https:\/\/[^/]*scholar.kyobobook[^/]*\/article\/detail\//.test(url))
+  if (/^https:\/\/[^/]*scholar[^/]*kyobobook[^/]*\/article\/detail\//.test(url))
     return 'SCHOLAR';
   if (/^https:\/\/www\.kci\.go\.kr\/kciportal\/landing\/article.kci/.test(url))
     return 'KOAJ';
@@ -58,12 +58,15 @@ function splitTitle(raw) {
   const delims = [':', '—', '–', raw.includes(' - ') ? ' - ' : '-'];
 
   // 낫표 범위 계산
-  const openDouble  = raw.indexOf('『'), closeDouble  = raw.indexOf('』');
+  const openDouble = raw.indexOf('『'), closeDouble  = raw.indexOf('』');
   const openSingle = raw.indexOf('「'), closeSingle = raw.indexOf('」');
+  const openSingleQuote = raw.indexOf('‘'), closeSingleQuote = raw.indexOf('’');
+  const openDoubleQuote = raw.indexOf('“'), closeDoubleQuote = raw.indexOf('”');
   const ranges = [];
   if (openDouble >= 0 && closeDouble > openDouble) ranges.push([openDouble, closeDouble]);
   if (openSingle >= 0 && closeSingle > openSingle) ranges.push([openSingle, closeSingle]);
-
+  if (openSingleQuote >= 0 && closeSingleQuote > openSingleQuote) ranges.push([openSingleQuote, closeSingleQuote]);
+  if (openDoubleQuote >= 0 && closeDoubleQuote > openDoubleQuote) ranges.push([openDoubleQuote, closeDoubleQuote]);
   // 유효한 분리 위치 찾기
   let chosen = null, chosenLen = 1;
   for (const d of delims) {
