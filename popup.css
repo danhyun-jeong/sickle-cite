@@ -99,7 +99,6 @@ input, textarea, select, button {
     box-sizing: border-box;
     font-size: 16px;
     line-height: 1.5;
-    margin-bottom: 5px;
 }
 .divider {
     width: 1px;
@@ -161,7 +160,7 @@ textarea:focus,
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: calc(var(--spacing)*0.6) 0 0 0;
+    padding: var(--spacing) 0 0 0;
 }
 .actions button {
     padding: 4px 12px;
@@ -193,6 +192,14 @@ textarea:focus,
     justify-content: center;
     gap: var(--spacing);
 }
+
+#tab1 .tags-container p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
 #tab3 h3 {
     font-size: 18px;
     font-weight: 600;
@@ -209,7 +216,7 @@ table td {
     text-align: left;
     padding: 8px;
     border-bottom: 1px solid var(--border);
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text);
 }
 .search-box input {
@@ -342,21 +349,20 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     width: 100%;          /* 전체 너비를 차지 */
 }
 #tab2 th:nth-child(1),
-#tab2 td:nth-child(1) { width: 8%; }   /* 첫 번째 열(저자) 너비 */
+#tab2 td:nth-child(1) { width: 9%; }   /* 첫 번째 열(저자) 너비 */
 #tab2 th:nth-child(2),
-#tab2 td:nth-child(2) { width: 48%; }   /* 두 번째 열(논문 제목) 너비 */
+#tab2 td:nth-child(2) { width: 45%; }   /* 두 번째 열(논문 제목) 너비 */
 #tab2 th:nth-child(3),
-#tab2 td:nth-child(3) { width: 13%; }   /* 세 번째 열(태그) 너비 */
+#tab2 td:nth-child(3) { width: 14%; }   /* 세 번째 열(태그) 너비 */
 #tab2 th:nth-child(4),
-#tab2 td:nth-child(4) { width: 10%; }   /* 네 번째 열(학술 DB) 너비 */
+#tab2 td:nth-child(4) { width: 8%; }   /* 네 번째 열(학술 DB) 너비 */
 #tab2 th:nth-child(5),
 #tab2 td:nth-child(5) { width: 11%; }   /* 다섯 번째 열(시간) 너비 */
 #tab2 th:nth-child(6),
-#tab2 td:nth-child(6) { width: 3%; }    /* 여섯 번째 열(삭제) 너비 */
+#tab2 td:nth-child(6) { width: 2.3%; }    /* 여섯 번째 열(삭제) 너비 */
 
-#tab2 td:nth-child(3) {
-    color: var(--accent);
-    font-size: 12px;
+#tab2 td:nth-child(3) div {
+    right: 4px;
 }
 
 #tab2 td:nth-child(4) a {
@@ -366,6 +372,14 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 #tab2 td:nth-child(5) {
     font-size: 9px;
     color: var(--text-secondary);
+}
+
+#tab2 td:nth-child(6) button[title="삭제"] {
+    padding: 0;
+}
+
+#tab2 table th {
+    padding-bottom: 10px !important;
 }
 
 #tab2 .checkbox-area {
@@ -596,17 +610,6 @@ input[type="radio"]:checked::before {
     margin-bottom: 10px;
 }
 
-#tags-input {
-    width: 100%;
-    height: 29px; /* 고정 높이 설정 */
-    padding: 5px 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 14px;
-    resize: none; /* 크기 조절 비활성화 */
-    box-sizing: border-box;
-    margin-bottom: 5px;
-}
 
 .tags-list {
     display: flex;
@@ -648,4 +651,111 @@ input[type="radio"]:checked::before {
 
 .tag-remove:hover {
     background-color: rgba(81, 116, 165, 0.2);
+}
+
+/* 태그 입력 UI 스타일 */
+.tag-input-container {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  background-color: var(--bg);
+  min-height: 40px;
+  cursor: text;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  max-width: 228.5px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tag-list li {
+  display: inline-flex;
+  align-items: center;
+  background-color: #e9eff8;
+  color: var(--accent);
+  border: 1px solid #d4dff0;
+  border-radius: 20px;
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.tag-list li .remove-tag {
+  margin-left: 2px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent);
+  transition: background-color 0.2s;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 14px;
+}
+
+.tag-list li .remove-tag:hover {
+  background-color: rgba(81, 116, 165, 0.15);
+}
+
+#tags-input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  padding: 4px;
+  width: 100%;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* 탭2 히스토리 테이블 안에서 태그 칩 스타일 */
+.history-tag-chip {
+  display: inline-block;
+  background-color: #e9eff8;
+  color: var(--accent);
+  border: 1px solid #d4dff0;
+  border-radius: 12px;
+  font-size: 11px;
+  padding: 1px 5px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+/* 태그 오른쪽 위에 겹쳐서 나타나는 붉은 배지 */
+.tag-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background-color: #4a75a8e0;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 8px;
+    padding: 2px;
+    line-height: 1.35;
+    text-indent: -1.5px;
+    text-align: center;
+    width: 10px;
+    height: 10px;
+}
+/* 탭2 히스토리 제목 셀: clamp 한 줄로 자르고 말줄임 표시 */
+.clamp-title {
+  display: -webkit-box;
+  line-clamp: 1;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
 }

@@ -13,7 +13,7 @@ function getAcademicDBType() {
   if (/^https:\/\/[^/]*earticle[^/]*net[^/]*\/Article\//.test(url))
     return 'eArticle';
   if (/^https:\/\/[^/]*scholar[^/]*kyobobook[^/]*\/article\/detail\//.test(url))
-    return 'SCHOLAR';
+    return '스콜라';
   if (/^https:\/\/www\.kci\.go\.kr\/kciportal\/landing\/article.kci/.test(url))
     return 'KOAJ';
   console.log ("‼️ 현재 페이지를 인식할 수 없습니다.");
@@ -685,7 +685,7 @@ function parseEArticle() {
   return verifyMetadata(rawMetadata);
 }
 
-//----- SCHOLAR 페이지 처리 함수: Scholar(교보 스콜라) 메타태그에서 정보 추출 -----
+//----- 스콜라 페이지 처리 함수: 교보 스콜라 메타태그에서 정보 추출 -----
 function parseSCHOLAR() {
   const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
   const cleanVal = key => collapse(fixTypography(meta(key)));
@@ -820,7 +820,7 @@ function getMetadata() {
   else if (academicDB === 'KISS') metadata = parseKISS();
   else if (academicDB === 'DBpia') metadata = parseDBpia();
   else if (academicDB === 'eArticle') metadata = parseEArticle();
-  else if (academicDB === 'SCHOLAR') metadata = parseSCHOLAR();
+  else if (academicDB === '스콜라') metadata = parseSCHOLAR();
   else if (academicDB === 'KOAJ') metadata = parseKOAJ();
 
   console.log(`${academicDB}에서 메타데이터가 추출됨`);

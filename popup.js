@@ -39,7 +39,7 @@ function updateVolIssOptions() {
     const val = volIssSelect.value;
     let html = '';
     if (val === 'none') {
-        html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">💁 권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
+        html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">💡 권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
     } else if (val === 'suffix') {
         html = `
         <div class="field"><label>권수 단위:</label><input type="text" name="volume-suffix" value="권"></div>
@@ -83,7 +83,7 @@ if (copyBtn) {
     navigator.clipboard.writeText(citationText)
       .then(() => {
         console.log('조합된 인용 표기가 클립보드에 복사되었습니다:', citationText);
-        showToast('조합된 인용 표기가 복사되었습니다');
+        showToast('조합된 인용 표기가 클립보드에 복사되었습니다');
       })
       .catch(err => console.error('복사 실패:', err));
   });
@@ -241,42 +241,6 @@ if (saveMetaBtn) {
     });
   });
 }
-// 이벤트 리슨 동작 5. "태그 저장" 버튼 클릭 시 태그를 메타데이터에 추가하고 내역에 저장
-const saveTagsBtn = document.getElementById('save-tags-btn');
-if (saveTagsBtn) {
-  saveTagsBtn.addEventListener('click', () => {
-    // 태그 입력값 가져오기
-    const tagsInput = document.getElementById('tags-input');
-    const tagsText = tagsInput.value.trim();
-    
-    if (!tagsText) {
-      showToastError('저장할 태그가 없습니다');
-      return;
-    }
-    // 콤마로 구분된 태그를 배열로 변환
-    const tagsArray = tagsText.split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag !== '');
-    // 중복 제거
-    const uniqueTags = [...new Set(tagsArray)];
-    
-    // 내역에 저장 - history item에 직접 projectTags 속성으로 저장
-    chrome.storage.local.get({ history: [] }, items => {
-      const history = items.history;
-      const idx = history.findIndex(item => item.timestampId === currentTimestampIdGlobal);
-      if (idx >= 0) {
-        // metadata 객체에 저장하지 않고 item에 직접 저장
-        history[idx].projectTags = uniqueTags;
-        chrome.storage.local.set({ history }, () => {
-          showToast('프로젝트 태그가 내역에 저장되었습니다');
-          renderHistory();
-        });
-      } else {
-        showToastError('저장된 내역을 찾을 수 없어 태그가 저장되지 못했습니다');
-      }
-    });
-  });
-}
 // 사용자에게 잠깐 보이는 알림을 생성하고 제거
 function showToast(message) {
   const toast = document.createElement('div');
@@ -354,32 +318,38 @@ function getMetadataText(meta) {
   return lines.join('\n');
 }
 
-// 태그
-
-// 태그 입력 필드를 초기화하는 함수
-function clearTagsInput() {
-  const tagsInput = document.getElementById('tags-input');
-  if (tagsInput) {
-    tagsInput.value = '';
-  }
+// 동일 논문을 deduplicateHistory 기준으로 판단하는 헬퍼 함수
+function isSameArticleBase(a, b) {
+  // a, b는 pageInfo 객체 또는 history item 객체
+  // a.metadata, b.metadata가 있으면 그 내부를 비교
+  const metaA = a.metadata || a;
+  const metaB = b.metadata || b;
+  return (
+    JSON.stringify(metaA.authors) === JSON.stringify(metaB.authors) &&
+    metaA.title_main === metaB.title_main &&
+    metaA.title_sub === metaB.title_sub &&
+    metaA.journal_name === metaB.journal_name &&
+    metaA.publisher === metaB.publisher &&
+    metaA.year === metaB.year
+  );
 }
-// 저장된 프로젝트 태그를 불러오는 함수
-function loadProjectTags() {
-  if (!currentTimestampIdGlobal) return;
-  // 먼저 태그 입력 필드 초기화
-  clearTagsInput();
+// popup 실행(현재 페이지에서 추출) 시 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
+function syncTagsFromDuplicate(pageInfo) {
   chrome.storage.local.get({ history: [] }, items => {
-    const history = items.history;
-    const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
-    
-    if (item && item.projectTags && Array.isArray(item.projectTags)) {
-      const tagsInput = document.getElementById('tags-input');
-      if (tagsInput) {
-        tagsInput.value = item.projectTags.join(', ');
+    const matchedItem = items.history.find(item => isSameArticleBase(item, pageInfo));
+    if (matchedItem) {
+      showToast('동일한 논문의 서지정보를 이전에 추출한 적이 있습니다');
+      if (matchedItem.projectTags && Array.isArray(matchedItem.projectTags)) {
+        if (typeof window.updateTagUI === "function") {
+          window.updateTagUI(matchedItem.projectTags);
+          saveTags(matchedItem.projectTags);
+        }
       }
     }
   });
 }
+
+// 메타데이터 처리 -----------------------
 
 // 메타 1: PageInfo(Metadata + AcademicDB + URL + Timestamp + Timestamp ID) 요청
 async function requestPageInfo() {
@@ -519,6 +489,143 @@ async function fetchCurrentMetadata() {
   return updateCurrentMetadata(currentMetadata); // currentMetadata를 받아와서 거기에 변경사항을 업데이트하고 결과로 반환
   // 이때 결과는 updateCurrentMetadata에 의해 사용자의 직접 수정을 반영한 currentMetadata임
   // 이후 이는 다시 전역변수 currentMetadataGlobal에 저장될 것임
+}
+
+// 태그 처리 -----------------------
+
+// 태그 1: 입력 필드를 초기화하는 함수 (input과 UI 입쳐진 list 모두 비움)
+function clearTagsInput() {
+  const tagsInput = document.getElementById('tags-input');
+  if (tagsInput) {
+    tagsInput.value = '';
+  }
+  const tagList = document.getElementById('tag-list');
+  if (tagList) {
+    tagList.innerHTML = '';
+  }
+}
+// 태그 2: 저장된 프로젝트 태그를 불러오는 함수 (1을 포함)
+function loadProjectTags() {
+  if (!currentTimestampIdGlobal) return;
+  clearTagsInput();
+  chrome.storage.local.get({ history: [] }, items => {
+    const history = items.history;
+    const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
+    if (item && item.projectTags && Array.isArray(item.projectTags)) {
+      if (typeof window.updateTagUI === "function") {
+        window.updateTagUI(item.projectTags);
+      }
+    }
+  });
+}
+// 태그 3: 태그 자동 저장 함수
+function saveTags(tags) {
+  const uniqueTags = [...new Set(tags)];
+  chrome.storage.local.get({ history: [] }, items => {
+    const history = items.history;
+    const targetItem = history.find(item => item.timestampId === currentTimestampIdGlobal);
+    if (targetItem) {
+      history.forEach(item => {
+        if (isSameArticleBase(item, targetItem)) {
+          item.projectTags = uniqueTags;
+        }
+      });
+      chrome.storage.local.set({ history }, () => {
+        renderHistory();
+      });
+    }
+  });
+}
+// 태그 4: UI 및 입력 로직을 초기화하는 함수
+function initializeTagInput() {
+  const tagsInput = document.getElementById('tags-input');
+  const tagList = document.getElementById('tag-list');
+  let tags = [];
+  // 입력창 초기화 함수
+  function updateTagsInput() {
+    if (tagsInput) {
+      tagsInput.value = '';
+    }
+  }
+  //현재 tags 배열을 기반으로 UI를 새로 그리는 함수
+  function updateTagUI(newTags) {
+    tags = Array.isArray(newTags) ? [...newTags] : [];
+    if (tagList) {
+      tagList.innerHTML = '';
+      tags.forEach((tag, idx) => {
+        const li = document.createElement('li');
+        li.textContent = tag;
+        const x = document.createElement('span');
+        x.textContent = '×';
+        x.className = 'remove-tag';
+        x.addEventListener('click', (e) => {
+          e.stopPropagation();
+          tags.splice(idx, 1);
+          updateTagUI(tags);
+          updateTagsInput(); // Enter 키 눌러 list에 태그 추가 시 입력창 초기화
+        });
+        li.appendChild(x);
+        tagList.appendChild(li);
+      });
+    }
+    updateTagsInput();
+    if (tagsInput) {
+      tagsInput.placeholder = tags.length === 0 ? '입력 후 Enter로 추가' : '';
+    }
+    // 태그 UI가 갱신될 때마다 자동 저장
+    saveTags(tags);
+  }
+  // 이벤트 리스너 1: 입력창 키보드 입력 처리
+  if (tagsInput && tagList) {
+    tagsInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+
+      const value = tagsInput.value.trim();
+
+      if ((e.key === 'Enter' || e.key === ',') && value) {
+        e.preventDefault();
+        if (tags.length >= 10) {
+          showToastError('태그는 최대 10개까지만 달 수 있습니다');
+          updateTagsInput();
+          return;
+        }
+        const cleanValue = value.endsWith(',') ? value.slice(0, -1).trim() : value;
+        if (cleanValue && !tags.includes(cleanValue)) {
+          tags.push(cleanValue);
+          updateTagUI(tags);
+        } else {
+          updateTagsInput();
+        }
+      } else if (e.key === 'Backspace' && tagsInput.value === '') {
+        if (tags.length > 0) {
+          tags.pop();
+          updateTagUI(tags);
+        }
+      }
+    });
+    // 이벤트 리스너 2: 태그 입력창 클릭 시 포커스 이동
+    const container = tagsInput.closest('.tag-input-container');
+    if (container) {
+      container.addEventListener('click', (e) => {
+        if (e.target === container) tagsInput.focus();
+      });
+    }
+    // 이벤트 리스너 3: 태그 입력창 비활성화(바깥 부분 클릭 등) 시 태그 추가
+    tagsInput.addEventListener('blur', () => {
+      const value = tagsInput.value.trim();
+      if (value && tags.length < 10 && !tags.includes(value)) {
+        tags.push(value);
+        updateTagUI(tags);
+      } else if (tags.length >= 10) {
+        showToastError('태그는 최대 10개까지만 달 수 있습니다');
+        updateTagsInput();
+      } else {
+        updateTagsInput(); // 중복 태그 입력 시 입력창 초기화
+      }
+    });
+  }
+
+  window.updateTagUI = updateTagUI;
 }
 
 // 설정 1: 탭3의 설정값을 객체로 반환
@@ -875,13 +982,13 @@ function renderHistory() {
       th.textContent = text;
       th.style.border = 'none';
       th.style.textAlign = 'left';
-      th.style.padding = '4px';
+      th.style.padding = '6px';
       headerRow.appendChild(th);
     });
     // 삭제 컬럼 헤더
     const thDel = document.createElement('th');
     thDel.style.border = 'none';
-    thDel.style.padding = '4px';
+    thDel.style.padding = '6px';
     thDel.textContent = ''; // 아이콘용 빈 헤더
     headerRow.appendChild(thDel);
     thead.appendChild(headerRow);
@@ -899,29 +1006,15 @@ function renderHistory() {
         authorText = authorsArray.join(', ');
       }
       // 제목 정보 불러오기
-      const rawTitle = item.metadata.title_main || ''; // 표에서는 이것만 씀
-      const rawTitleSub = item.metadata.title_sub || '';
+      const titleMain = item.metadata.title_main || ''; // 표에서는 이것만 씀
+      const titleSub = item.metadata.title_sub || '';
       const styleSettings = getStyleSettings();
       const checkedSeparator = item.metadata.title_sub ? styleSettings.titleSeparator : '';
-      const fullTitle = `${rawTitle}${checkedSeparator}${rawTitleSub}`; // 툴팁용
-      // 제목 표시 규칙 설정: 본제목만 가져옴, 공백 포함 최대 32자, 넘으면 '…' 추가
-      const titleText = rawTitle.length > 30
-        ? rawTitle.slice(0, 30) + '…'
-        : rawTitle;
-      // 태그 정보 처리
-      const tagsArray = Array.isArray(item.projectTags) ? item.projectTags : [];
-      let tagText = '-';
-      if (tagsArray.length > 0) {
-        // 첫 번째 태그만 6글자까지 표시
-        tagText = tagsArray[0].length > 6 ? tagsArray[0].slice(0, 6) + '…' : tagsArray[0];
-        if (tagsArray.length > 1) {
-          tagText += ' +';  // 추가 태그가 있음을 표시
-        }
-      }
+      const fullTitle = `${titleMain}${checkedSeparator}${titleSub}`; // 툴팁용
       ['author', 'title', 'tag', 'db', 'time'].forEach((_, idx) => {
         const td = document.createElement('td');
         td.style.border = 'none';
-        td.style.padding = '4px';
+        td.style.padding = '6px';
         // 제1열: 저자
         if (idx === 0) {
           td.textContent = authorText;
@@ -949,9 +1042,13 @@ function renderHistory() {
           });
         // 제2열: 제목
         } else if (idx === 1) {
-          td.textContent = titleText;
+          // 제목 셀: line-clamp 적용을 위한 div 래퍼 생성
+          const titleDiv = document.createElement('div');
+          titleDiv.className = 'clamp-title';
+          titleDiv.textContent = titleMain;
+          td.appendChild(titleDiv);
           td.title = fullTitle; //툴팁(기본) 툴팁에서는 전체 제목을 보여줌
-          td.dataset.tooltip = rawTitle;
+          td.dataset.tooltip = titleMain;
           // 클릭 시 탭1으로 전환 후 데이터 채우기
           td.style.cursor = 'pointer';
           td.addEventListener('click', () => {
@@ -972,9 +1069,36 @@ function renderHistory() {
           });
         // 제3열: 태그
         } else if (idx === 2) {
-          td.textContent = tagText;
-          td.title = Array.isArray(item.projectTags) ? item.projectTags.join(', ') : ''; // 툴팁으로 전체 태그 표시
-          td.style.color = tagText ? 'var(--accent)' : 'var(--text-secondary)';
+          const tagsArray = Array.isArray(item.projectTags) ? item.projectTags : [];
+          td.innerHTML = '';
+          if (tagsArray.length > 0) {
+            // 첫 번째 태그만 표시 (최대 8자 + …)
+            const firstTag = document.createElement('span');
+            firstTag.className = 'history-tag-chip';
+            const raw = tagsArray[0];
+            const truncated = raw.length > 8 ? raw.slice(0, 8) + '…' : raw;
+            firstTag.textContent = truncated;
+
+            // 태그 배지용 wrapper div 추가
+            const tagWrapper = document.createElement('div');
+            tagWrapper.style.position = 'relative';
+            tagWrapper.style.display = 'inline-block';
+            tagWrapper.appendChild(firstTag);
+
+            if (tagsArray.length > 1) {
+              const badge = document.createElement('span');
+              badge.className = 'tag-badge';
+              badge.textContent = `+${tagsArray.length - 1}`;
+              tagWrapper.appendChild(badge);
+            }
+
+            td.appendChild(tagWrapper);
+            td.title = tagsArray.join(', ');
+          } else {
+            td.textContent = '';
+            td.title = '태그 없음';
+          }
+          td.style.color = tagsArray.length > 0 ? 'var(--accent)' : 'var(--text-secondary)';
           td.style.fontSize = '12px';
           td.style.cursor = 'pointer';
           // 클릭 시 탭1으로 전환 후 데이터 채우기 (다른 열과 동일한 동작)
@@ -1012,7 +1136,7 @@ function renderHistory() {
       // 삭제 버튼 셀
       const tdDel = document.createElement('td');
       tdDel.style.border = 'none';
-      tdDel.style.padding = '4px';
+      tdDel.style.padding = '6px';
       const btn = document.createElement('button');
       btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" alt="삭제" width="14" height="14" style="color: var(--text-secondary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
       btn.style.border = 'none';
@@ -1139,11 +1263,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // 2. 실행 시마다 pageInfo를 history에 저장
   requestPageInfo()
     .then(pageInfo => {
-      savePageInfoToHistory(pageInfo)
-      currentTimestampIdGlobal = pageInfo.timestampId
+      currentTimestampIdGlobal = pageInfo.timestampId; // 추출한 정보 중 타임스탬프ID를 전역변수에 저장
+      savePageInfoToHistory(pageInfo); // 추출한 정보를 히스토리에 저장
+      syncTagsFromDuplicate(pageInfo); // 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
     })
     .catch(err => console.log('히스토리 저장 실패.', err));
-  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기. | 조합된 인용 표기에 
+  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기. 조합된 인용 표기 채워 넣기.
   fetchCurrentMetadata()
     .then(currentMetadata => {
       currentMetadataGlobal = currentMetadata || {};
@@ -1161,4 +1286,7 @@ document.addEventListener('DOMContentLoaded', () => {
   reRenderHistoryCheck();
   reRenderHistorySearch();
   downloadHistory();
+
+  // 태그 UI 초기화 함수 호출
+  initializeTagInput();
 });
