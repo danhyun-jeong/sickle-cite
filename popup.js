@@ -1289,4 +1289,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 태그 UI 초기화 함수 호출
   initializeTagInput();
+
+  // Windows인 경우에만 스크롤바 설정을 적용
+  if (navigator.platform.startsWith('Win')) {
+    const scrollTargets = [
+      '#tab1 .left-pane .metadata-container',
+      '#tab1 .right-pane .citation-input',
+      '#tab1 .right-pane .tag-input-container',
+      '#tab2 #history-list',
+      '#tab3 .tab-content'
+    ];
+
+    scrollTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) {
+        el.classList.add('win-scrollbar', 'hide-scrollbar');
+
+        let timeoutId;
+        // Determine scroll event direction for tag-input-container
+        const isHorizontal = selector === '#tab1 .right-pane .tag-input-container';
+        el.addEventListener('scroll', () => {
+          el.classList.add('show-scrollbar');
+          el.classList.remove('hide-scrollbar');
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            el.classList.remove('show-scrollbar');
+            el.classList.add('hide-scrollbar');
+          }, 1000);
+        });
+      }
+    });
+  }
 });

@@ -760,32 +760,31 @@ input[type="radio"]:checked::before {
   white-space: normal;
 }
 
-/* 크로미움 기반에서 스크롤 시에만 나타나는 얇은 스크롤바 설정 */
-body,
-.tab-content,
-#history-list,
-.pane,
-.pane-section,
-.metadata-container,
-.tags-list {
-  overflow-y: overlay; /* Chromium: 오버레이 스크롤바 */
+/* 윈도우 전용 스크롤바 커스터마이징 */
+.win-scrollbar {
+  overflow: overlay !important; /* 스크롤바를 오버레이로 설정 */
 }
 
-/* 크로미움 기반 스크롤바 커스터마이징 */
-::-webkit-scrollbar {
+/* 기본적으로 스크롤바를 숨김 */
+.win-scrollbar.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 스크롤 중일 때만 얇고 투명한 스크롤바 표시 */
+.win-scrollbar.show-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--border);
+.win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(81, 116, 165, 0.35); /* 약간 투명한 accent */
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-button {
-  display: none;
+.win-scrollbar.show-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* 트랙 제거 */
+}
+
+.win-scrollbar.show-scrollbar::-webkit-scrollbar-button {
+  display: none; /* 위아래 버튼 제거 */
 }
