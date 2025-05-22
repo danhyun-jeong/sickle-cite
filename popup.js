@@ -1316,5 +1316,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     });
+
+    const container = tagList.closest('.tag-input-container');
+    if (container) {
+      container.classList.toggle('filled', tags.length > 0);
+    }
   }
 });
