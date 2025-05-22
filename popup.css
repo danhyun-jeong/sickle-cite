@@ -762,12 +762,15 @@ input[type="radio"]:checked::before {
 
 /* 윈도우 전용 스크롤바 커스터마이징 */
 .win-scrollbar {
-  scrollbar-gutter: stable both-edges;
+  scrollbar-gutter: stable;
 }
 
 /* 기본적으로 스크롤바를 숨김 */
-.win-scrollbar.hide-scrollbar::-webkit-scrollbar {
-  display: none;
+.win-scrollbar.hide-scrollbar::-webkit-scrollbar-thumb {
+    background-color: transparent;
+}
+.win-scrollbar.hide-scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
 }
 
 /* 스크롤 중일 때만 얇고 투명한 스크롤바 표시 */
@@ -777,7 +780,7 @@ input[type="radio"]:checked::before {
 }
 
 .win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(106, 110, 115, 0.25); /* 약간 투명한 accent */
+  background-color: rgba(75, 78, 81, 0.25); /* 약간 투명한 accent */
   border-radius: 3px;
 }
 
