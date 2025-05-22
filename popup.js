@@ -574,6 +574,11 @@ function initializeTagInput() {
     }
     // 태그 UI가 갱신될 때마다 자동 저장
     saveTags(tags);
+    // 추가: .tag-input-container의 .filled 클래스 갱신
+    const container = tagList?.closest('.tag-input-container');
+    if (container) {
+      container.classList.toggle('filled', tags.length > 0);
+    }
   }
   // 이벤트 리스너 1: 입력창 키보드 입력 처리
   if (tagsInput && tagList) {
@@ -1316,14 +1321,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     });
-    
-    const tagList = document.getElementById('tag-list');
-    if (tagList) {
-      const container = tagList.closest('.tag-input-container');
-      if (container) {
-        const currentTags = Array.from(tagList.querySelectorAll('li')).filter(li => li.textContent.trim() !== '');
-        container.classList.toggle('filled', currentTags.length > 0);
-      }
-    }
   }
 });
