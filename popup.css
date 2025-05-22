@@ -764,6 +764,16 @@ input[type="radio"]:checked::before {
 .win-scrollbar {
     scrollbar-gutter: stable;
 }
+
+#tab1 .right-pane .citation-input.win-scrollbar {
+    scrollbar-gutter: stable both-edges;
+}
+
+#tab1 .right-pane .tag-input-container.win-scrollbar.show-scrollbar {
+    padding-top: 9px;
+    padding-bottom: 3px;
+}
+
 .win-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -777,11 +787,11 @@ input[type="radio"]:checked::before {
 
 /* 스크롤 없을 때는 스크롤바를 투명하게 */
 .win-scrollbar.hide-scrollbar::-webkit-scrollbar-thumb {
-    background-color: transparent; /* 약간 투명한 accent */
-  }
+    background-color: transparent;
+}
 
 /* 스크롤 있을 때는 스크롤바 표시 */
 .win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(106, 110, 115, 0.25); /* 약간 투명한 accent */
+  background-color: rgba(101, 103, 105, 0.8); /* 약간 투명한 accent */
   border-radius: 3px;
 }

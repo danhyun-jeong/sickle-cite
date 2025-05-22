@@ -1305,7 +1305,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (el) {
         el.classList.add('win-scrollbar', 'hide-scrollbar');
         let timeoutId;
-        const isHorizontal = selector === '#tab1 .right-pane .tag-input-container';
         el.addEventListener('scroll', () => {
           el.classList.add('show-scrollbar');
           el.classList.remove('hide-scrollbar');
