@@ -774,6 +774,15 @@ input[type="radio"]:checked::before {
     padding-bottom: 3px;
 }
 
+#tab1 .right-pane .citation-input.win-scrollbar {
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+#tab2 #history-list.win-scrollbar {
+    padding-right: 4px;
+}
+
 .win-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
