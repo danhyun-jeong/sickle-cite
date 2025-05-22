@@ -1316,10 +1316,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     });
-
-    const container = tagList.closest('.tag-input-container');
+    
+    const tagList = document.querySelector('#tag-list');
+    const container = tagList?.closest('.tag-input-container');
     if (container) {
-      container.classList.toggle('filled', tags.length > 0);
+      const currentTags = Array.from(tagList.children).map(li => li.textContent.trim()).filter(Boolean);
+      container.classList.toggle('filled', currentTags.length > 0);
     }
   }
 });

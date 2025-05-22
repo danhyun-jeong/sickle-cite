@@ -769,7 +769,7 @@ input[type="radio"]:checked::before {
     scrollbar-gutter: stable both-edges;
 }
 
-#tab1 .right-pane .tag-input-container.win-scrollbar.field {
+#tab1 .right-pane .tag-input-container.win-scrollbar.filled {
     padding-top: 9px;
     padding-bottom: 3px;
 }
