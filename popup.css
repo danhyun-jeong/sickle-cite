@@ -655,83 +655,83 @@ input[type="radio"]:checked::before {
 
 /* 태그 입력 UI 스타일 */
 .tag-input-container {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-  background-color: var(--bg);
-  min-height: 40px;
-  cursor: text;
-  position: relative;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  max-width: 228.5px;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 8px;
+    background-color: var(--bg);
+    min-height: 40px;
+    cursor: text;
+    position: relative;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    max-width: 228.5px;
 }
 
 .tag-list {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
 }
 
 .tag-list li {
-  display: inline-flex;
-  align-items: center;
-  background-color: #e9eff8;
-  color: var(--accent);
-  border: 1px solid #d4dff0;
-  border-radius: 20px;
-  font-size: 12px;
-  padding: 4px 8px;
-  white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    background-color: #e9eff8;
+    color: var(--accent);
+    border: 1px solid #d4dff0;
+    border-radius: 20px;
+    font-size: 12px;
+    padding: 4px 8px;
+    white-space: nowrap;
 }
 
 .tag-list li .remove-tag {
-  margin-left: 2px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--accent);
-  transition: background-color 0.2s;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  text-align: center;
-  line-height: 14px;
-}
+    margin-left: 2px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--accent);
+    transition: background-color 0.2s;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    text-align: center;
+    line-height: 14px;
+    }
 
 .tag-list li .remove-tag:hover {
-  background-color: rgba(81, 116, 165, 0.15);
+    background-color: rgba(81, 116, 165, 0.15);
 }
 
 #tags-input {
-  border: none;
-  outline: none;
-  font-size: 14px;
-  padding: 4px;
-  width: 100%;
-  flex-shrink: 0;
-  white-space: nowrap;
-  box-sizing: border-box;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    padding: 4px;
+    width: 100%;
+    flex-shrink: 0;
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 
 /* 탭2 히스토리 테이블 안에서 태그 칩 스타일 */
 .history-tag-chip {
-  display: inline-block;
-  background-color: #e9eff8;
-  color: var(--accent);
-  border: 1px solid #d4dff0;
-  border-radius: 12px;
-  font-size: 11px;
-  padding: 1px 5px;
-  margin-right: 4px;
-  white-space: nowrap;
-}
+    display: inline-block;
+    background-color: #e9eff8;
+    color: var(--accent);
+    border: 1px solid #d4dff0;
+    border-radius: 12px;
+    font-size: 11px;
+    padding: 1px 5px;
+    margin-right: 4px;
+    white-space: nowrap;
+    }
 
 /* 태그 오른쪽 위에 겹쳐서 나타나는 붉은 배지 */
 .tag-badge {
@@ -751,13 +751,13 @@ input[type="radio"]:checked::before {
 }
 /* 탭2 히스토리 제목 셀: clamp 한 줄로 자르고 말줄임 표시 */
 .clamp-title {
-  display: -webkit-box;
-  line-clamp: 1;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: normal;
+    display: -webkit-box;
+    line-clamp: 1;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
 }
 
 /* 윈도우 전용 스크롤바 커스터마이징 */
@@ -801,6 +801,6 @@ input[type="radio"]:checked::before {
 
 /* 스크롤 있을 때는 스크롤바 표시 */
 .win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(101, 103, 105, 0.8); /* 약간 투명한 accent */
-  border-radius: 3px;
+    background-color: rgba(101, 103, 105, 0.8); /* 약간 투명한 accent */
+    border-radius: 3px;
 }
