@@ -1317,11 +1317,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    const tagList = document.querySelector('#tag-list');
-    const container = tagList?.closest('.tag-input-container');
-    if (container) {
-      const currentTags = Array.from(tagList.children).map(li => li.textContent.trim()).filter(Boolean);
-      container.classList.toggle('filled', currentTags.length > 0);
+    const tagList = document.getElementById('tag-list');
+    if (tagList) {
+      const container = tagList.closest('.tag-input-container');
+      if (container) {
+        const currentTags = Array.from(tagList.querySelectorAll('li')).filter(li => li.textContent.trim() !== '');
+        container.classList.toggle('filled', currentTags.length > 0);
+      }
     }
   }
 });
