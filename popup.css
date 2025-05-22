@@ -759,3 +759,33 @@ input[type="radio"]:checked::before {
   text-overflow: ellipsis;
   white-space: normal;
 }
+
+/* 크로미움 기반에서 스크롤 시에만 나타나는 얇은 스크롤바 설정 */
+body,
+.tab-content,
+#history-list,
+.pane,
+.pane-section,
+.metadata-container,
+.tags-list {
+  overflow-y: overlay; /* Chromium: 오버레이 스크롤바 */
+}
+
+/* 크로미움 기반 스크롤바 커스터마이징 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
