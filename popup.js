@@ -1297,16 +1297,14 @@ document.addEventListener('DOMContentLoaded', () => {
       '#tab1 .right-pane .citation-input',
       '#tab1 .right-pane .tag-input-container',
       '#tab2 #history-list',
-      '#tab3 .tab-content'
+      '#tab3-scroll-area'
     ];
 
     scrollTargets.forEach(selector => {
       const el = document.querySelector(selector);
       if (el) {
         el.classList.add('win-scrollbar', 'hide-scrollbar');
-
         let timeoutId;
-        // Determine scroll event direction for tag-input-container
         const isHorizontal = selector === '#tab1 .right-pane .tag-input-container';
         el.addEventListener('scroll', () => {
           el.classList.add('show-scrollbar');
