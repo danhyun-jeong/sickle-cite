@@ -267,6 +267,31 @@ function showToast(message) {
     toast.addEventListener('transitionend', () => toast.remove());
   }, 1000);
 }
+function showToastLong(message) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  Object.assign(toast.style, {
+    position: 'fixed',
+    bottom: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(37, 37, 37, 0.8)',
+    color: '#fff',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    zIndex: '1200',
+    opacity: '0',
+    transition: 'opacity 0.5s ease'
+  });
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+  });
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.addEventListener('transitionend', () => toast.remove());
+  }, 1500);
+}
 function showToastError(message) {
   const toast = document.createElement('div');
   toast.textContent = message;
@@ -334,18 +359,43 @@ function isSameArticleBase(a, b) {
   );
 }
 
-// popup 실행(현재 페이지에서 추출) 시 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
-function syncTagsFromDuplicate(pageInfo) {
+// // popup 실행(현재 페이지에서 추출) 시 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
+// function syncTagsFromDuplicate(pageInfo) {
+//   chrome.storage.local.get({ history: [] }, items => {
+//     const matchedItem = items.history.find(item => isSameArticleBase(item, pageInfo));
+//     if (matchedItem) {
+//       showToast('동일한 논문의 서지정보를 이전에 추출한 적이 있습니다');
+//       if (matchedItem.projectTags && Array.isArray(matchedItem.projectTags)) {
+//         if (typeof window.updateTagUI === "function") {
+//           window.updateTagUI(matchedItem.projectTags);
+//           saveTags(matchedItem.projectTags);
+//         }
+//       }
+//     }
+//   });
+// }
+
+// popup 실행 후, 동일 논문 중 가장 이른 내역의 메타데이터와 태그를 불러와서 필드에 채움
+function applyEarliestDuplicate(pageInfo) {
   chrome.storage.local.get({ history: [] }, items => {
-    const matchedItem = items.history.find(item => isSameArticleBase(item, pageInfo));
-    if (matchedItem) {
-      showToast('동일한 논문의 서지정보를 이전에 추출한 적이 있습니다');
-      if (matchedItem.projectTags && Array.isArray(matchedItem.projectTags)) {
-        if (typeof window.updateTagUI === "function") {
-          window.updateTagUI(matchedItem.projectTags);
-          saveTags(matchedItem.projectTags);
+    const matchedItems = items.history.filter(item => isSameArticleBase(item, pageInfo));
+    if (matchedItems.length > 0) {
+      // timestampId 오름차순 정렬 → 가장 이른 항목 선택
+      matchedItems.sort((a, b) => a.timestampId - b.timestampId);
+      const earliest = matchedItems[0];
+      // currentTimestampIdGlobal 갱신
+      currentTimestampIdGlobal = earliest.timestampId;
+      // 메타데이터 필드 채우기
+      fillMetadataField(earliest.metadata);
+      // 태그 UI 및 저장
+      if (earliest.projectTags && Array.isArray(earliest.projectTags)) {
+        if (typeof window.updateTagUI === 'function') {
+          window.updateTagUI(earliest.projectTags);
+          saveTags(earliest.projectTags);
         }
       }
+      const shortTimestamp = earliest.timestamp.slice(0, earliest.timestamp.lastIndexOf(':'));
+      showToastLong(`동일한 논문의 서지정보를 이전에 추출한 적이 있습니다.\n최초(${shortTimestamp}) 추출된 서지정보를 불러왔습니다.`);
     }
   });
 }
@@ -549,7 +599,7 @@ function loadProjectTags() {
     }
   });
 }
-// 태그 3: 태그 자동 저장 함수
+// 태그 3: 태그를 저장하는 함수
 function saveTags(tags) {
   const uniqueTags = [...new Set(tags)];
   chrome.storage.local.get({ history: [] }, items => {
@@ -571,12 +621,6 @@ function saveTags(tags) {
 function setupTagInputUI() {
   const tagsInput = document.getElementById('tags-input');
   const tagList = document.getElementById('tag-list');
-  // 자동완성 후보 수집용 allTagCandidates 선언 및 초기화
-  let allTagCandidates = [];
-  chrome.storage.local.get({ history: [] }, items => {
-    const tags = items.history.flatMap(item => item.projectTags || []);
-    allTagCandidates = [...new Set(tags)];
-  });
   let tags = [];
   // 입력창 초기화 함수
   function clearTagsInput() {
@@ -617,6 +661,15 @@ function setupTagInputUI() {
       container.classList.toggle('filled', tags.length > 0);
     }
   }
+  // 자동완성 후보 수집용 allTagCandidates 선언 및 초기화
+  let allTagCandidates = [];
+  function updateAllTagCandidates() {
+    chrome.storage.local.get({ history: [] }, items => {
+      const tags = items.history.flatMap(item => item.projectTags || []);
+      allTagCandidates = [...new Set(tags)];
+    });
+  }
+  updateAllTagCandidates();
   // 자동완성 리스트 DOM 준비 (없으면 생성)
   let autocompleteList = document.getElementById('autocomplete-list');
   if (!autocompleteList && tagsInput) {
@@ -634,6 +687,7 @@ function setupTagInputUI() {
       const list = document.getElementById('autocomplete-list');
       const active = list?.querySelector('.active');
       const items = list ? Array.from(list.children) : [];
+
       // 방향키/Enter 자동완성 처리
       if (e.key === 'ArrowDown' && items.length > 0) {
         e.preventDefault();
@@ -661,6 +715,22 @@ function setupTagInputUI() {
         }
         if (list) list.classList.add('hidden');
         return;
+      }
+      // Tab 키로 자동완성 첫 항목 선택
+      if (e.key === 'Tab') {
+        if (list && !list.classList.contains('hidden') && items.length > 0) {
+          e.preventDefault();
+          const firstTag = items[0].textContent;
+          clearTagsInput();
+          if (!tags.includes(firstTag) && tags.length < 10) {
+            tags.push(firstTag);
+            updateTagUI(tags);
+          } else if (tags.length >= 10) {
+            showToastError('태그는 최대 10개까지만 달 수 있습니다');
+          }
+          list.classList.add('hidden');
+          return;
+        }
       }
 
       const value = tagsInput.value.trim();
@@ -700,9 +770,11 @@ function setupTagInputUI() {
         list.classList.add('hidden');
         return;
       }
+      // 자동완성은 최대 4개까지만 표시
+      updateAllTagCandidates();
       const matches = allTagCandidates.filter(tag =>
         Hangul.search(tag, value) !== -1 && !tags.includes(tag)
-      ).slice(0, 3);
+      ).slice(0, 4);
       if (matches.length === 0) {
         list.classList.add('hidden');
         return;
@@ -1176,6 +1248,8 @@ function renderHistory() {
             }
             updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
             fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
           });
         // 제2열: 제목
         } else if (idx === 1) {
@@ -1203,6 +1277,8 @@ function renderHistory() {
             }
             updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
             fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
           });
         // 제3열: 태그
         } else if (idx === 2) {
@@ -1254,6 +1330,8 @@ function renderHistory() {
             }
             updateCurrentMetadata(currentMetadataGlobal);
             fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
           });
         // 제4열: 학술 DB
         } else if (idx === 3) {
@@ -1402,10 +1480,10 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(pageInfo => {
       currentTimestampIdGlobal = pageInfo.timestampId; // 추출한 정보 중 타임스탬프ID를 전역변수에 저장
       savePageInfoToHistory(pageInfo); // 추출한 정보를 히스토리에 저장
-      syncTagsFromDuplicate(pageInfo); // 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
+      applyEarliestDuplicate(pageInfo); // 이미 저장된 논문이면 알림을 띄우고 가장 이른 중복 논문의 서지정보와 태그를 가져와서 채움
     })
     .catch(err => console.log('히스토리 저장 실패.', err));
-  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기. 조합된 인용 표기 채워 넣기.
+  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기, 조합된 인용 표기 채워 넣기
   fetchCurrentMetadata()
     .then(currentMetadata => {
       currentMetadataGlobal = currentMetadata || {};

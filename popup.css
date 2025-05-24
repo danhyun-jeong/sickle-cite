@@ -804,6 +804,7 @@ input[type="radio"]:checked::before {
 .win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
     background-color: rgba(101, 103, 105, 0.8); /* 약간 투명한 accent */
     border-radius: 3px;
+    transition: background-color 0.3s ease;
 }
 /* 태그 입력 자동완성 드롭다운 */
 .autocomplete-list {
