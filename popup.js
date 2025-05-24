@@ -525,7 +525,7 @@ async function fetchCurrentMetadata() {
 // 태그 처리 -----------------------
 
 // 태그 1: 입력 필드를 초기화하는 함수 (input과 UI 입쳐진 list 모두 비움)
-function clearTagsInput() {
+function clearTagsInputList() {
   const tagsInput = document.getElementById('tags-input');
   if (tagsInput) {
     tagsInput.value = '';
@@ -538,7 +538,7 @@ function clearTagsInput() {
 // 태그 2: 저장된 프로젝트 태그를 불러오는 함수 (1을 포함)
 function loadProjectTags() {
   if (!currentTimestampIdGlobal) return;
-  clearTagsInput();
+  clearTagsInputList();
   chrome.storage.local.get({ history: [] }, items => {
     const history = items.history;
     const item = history.find(item => item.timestampId === currentTimestampIdGlobal);

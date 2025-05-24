@@ -195,11 +195,11 @@ function parseRISS() {
       }
     });
     // 3. 국문 초록 추출: '국문 초록' 레이블 위치 기준으로 텍스트 노드 수집
-    const krTitleP = Array.from(document.querySelectorAll('p.title')).find(p => p.textContent.includes('국문 초록'));
-    if (krTitleP) {
-      const divText = krTitleP.parentElement.querySelector('div.text.off');
-      if (divText) {
-        const paras = Array.from(divText.querySelectorAll('p')).map(p => fixTypography(p.textContent));
+    const abstractTitleP = Array.from(document.querySelectorAll('p.title')).find(p => p.textContent.includes('국문 초록'));
+    if (abstractTitleP) {
+      const abstractDiv = abstractTitleP.parentElement.querySelector('div.text.off');
+      if (abstractDiv) {
+        const paras = Array.from(abstractDiv.querySelectorAll('p')).map(p => fixTypography(p.textContent));
         tmp.abstract = collapse(paras.join('\n\n'));
       }
     }
