@@ -737,6 +737,10 @@ function setupTagInputUI() {
 
       if ((e.key === 'Enter' || e.key === ',') && value) {
         e.preventDefault();
+        if (value.length > 15) {
+          showToastError('태그는 15자 이하여야 합니다');
+          return;
+        }
         if (tags.length >= 10) {
           showToastError('태그는 최대 10개까지만 달 수 있습니다');
           clearTagsInput();
@@ -749,7 +753,6 @@ function setupTagInputUI() {
         } else {
           clearTagsInput();
         }
-        // 자동완성 닫기
         if (list) list.classList.add('hidden');
       } else if (e.key === 'Backspace' && tagsInput.value === '') {
         if (tags.length > 0) {
@@ -822,6 +825,10 @@ function setupTagInputUI() {
           return;
         }
         const value = tagsInput.value.trim();
+        if (value.length > 15) {
+          showToastError('태그는 15자 이하여야 합니다');
+          return;
+        }
         if (value && tags.length < 10 && !tags.includes(value)) {
           tags.push(value);
           updateTagUI(tags);
