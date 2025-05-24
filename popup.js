@@ -693,7 +693,7 @@ function setupTagInputUI() {
     // 자동완성 후보 필터링 및 렌더링
     tagsInput.addEventListener('input', () => {
       const list = document.getElementById('autocomplete-list');
-      const value = tagsInput.value.trim().toLowerCase();
+      const value = tagsInput.value.trim();
       if (!list) return;
       list.innerHTML = '';
       if (!value) {
@@ -701,7 +701,7 @@ function setupTagInputUI() {
         return;
       }
       const matches = allTagCandidates.filter(tag =>
-        tag.toLowerCase().includes(value) && !tags.includes(tag)
+        Hangul.search(tag, value) !== -1 && !tags.includes(tag)
       ).slice(0, 3);
       if (matches.length === 0) {
         list.classList.add('hidden');
@@ -1088,11 +1088,10 @@ function renderHistory() {
     const terms = searchValue.split(/\s+/).filter(Boolean);
     const baseHistory = terms.length
       ? rawHistory.filter(item => {
-          // 메타데이터와 projectTags를 모두 검색 대상에 포함
           const metaValues = Object.values(item.metadata).flatMap(v => Array.isArray(v) ? v : [v]);
           const tagValues = Array.isArray(item.projectTags) ? item.projectTags : [];
-          const haystack = [...metaValues, ...tagValues].join(' ').toLowerCase();
-          return terms.every(term => haystack.includes(term));
+          const haystack = [...metaValues, ...tagValues].join(' ');
+          return terms.every(term => Hangul.search(haystack, term) !== -1);
         })
       : rawHistory;
     // 체크박스 상태에 따라 중복 처리 분기
