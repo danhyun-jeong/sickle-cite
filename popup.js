@@ -567,13 +567,19 @@ function saveTags(tags) {
     }
   });
 }
-// 태그 4: UI 및 입력 로직을 초기화하는 함수
-function initializeTagInput() {
+// 태그 4: 태그 입력 관련 모든 동작을 설정하는 함수
+function setupTagInputUI() {
   const tagsInput = document.getElementById('tags-input');
   const tagList = document.getElementById('tag-list');
+  // 자동완성 후보 수집용 allTagCandidates 선언 및 초기화
+  let allTagCandidates = [];
+  chrome.storage.local.get({ history: [] }, items => {
+    const tags = items.history.flatMap(item => item.projectTags || []);
+    allTagCandidates = [...new Set(tags)];
+  });
   let tags = [];
   // 입력창 초기화 함수
-  function updateTagsInput() {
+  function clearTagsInput() {
     if (tagsInput) {
       tagsInput.value = '';
     }
@@ -593,13 +599,13 @@ function initializeTagInput() {
           e.stopPropagation();
           tags.splice(idx, 1);
           updateTagUI(tags);
-          updateTagsInput(); // Enter 키 눌러 list에 태그 추가 시 입력창 초기화
+          clearTagsInput(); // Enter 키 눌러 list에 태그 추가 시 입력창 초기화
         });
         li.appendChild(x);
         tagList.appendChild(li);
       });
     }
-    updateTagsInput();
+    clearTagsInput();
     if (tagsInput) {
       tagsInput.placeholder = tags.length === 0 ? '입력 후 Enter로 추가' : '';
     }
@@ -611,10 +617,51 @@ function initializeTagInput() {
       container.classList.toggle('filled', tags.length > 0);
     }
   }
-  // 이벤트 리스너 1: 입력창 키보드 입력 처리
+  // 자동완성 리스트 DOM 준비 (없으면 생성)
+  let autocompleteList = document.getElementById('autocomplete-list');
+  if (!autocompleteList && tagsInput) {
+    autocompleteList = document.createElement('ul');
+    autocompleteList.id = 'autocomplete-list';
+    autocompleteList.className = 'autocomplete-list hidden';
+    tagsInput.parentNode.appendChild(autocompleteList);
+  }
+  // 이벤트 리스너
   if (tagsInput && tagList) {
     tagsInput.addEventListener('keydown', (e) => {
       if (e.isComposing || e.keyCode === 229) return;
+
+      // 자동완성 후보 및 선택 처리
+      const list = document.getElementById('autocomplete-list');
+      const active = list?.querySelector('.active');
+      const items = list ? Array.from(list.children) : [];
+      // 방향키/Enter 자동완성 처리
+      if (e.key === 'ArrowDown' && items.length > 0) {
+        e.preventDefault();
+        const next = active ? active.nextElementSibling || items[0] : items[0];
+        items.forEach(el => el.classList.remove('active'));
+        if (next) next.classList.add('active');
+        return;
+      }
+      if (e.key === 'ArrowUp' && items.length > 0) {
+        e.preventDefault();
+        const prev = active ? active.previousElementSibling || items[items.length - 1] : items[items.length - 1];
+        items.forEach(el => el.classList.remove('active'));
+        if (prev) prev.classList.add('active');
+        return;
+      }
+      if (e.key === 'Enter' && active) {
+        e.preventDefault();
+        const tag = active.textContent;
+        clearTagsInput();
+        if (!tags.includes(tag) && tags.length < 10) {
+          tags.push(tag);
+          updateTagUI(tags);
+        } else if (tags.length >= 10) {
+          showToastError('태그는 최대 10개까지만 달 수 있습니다');
+        }
+        if (list) list.classList.add('hidden');
+        return;
+      }
 
       const value = tagsInput.value.trim();
 
@@ -622,7 +669,7 @@ function initializeTagInput() {
         e.preventDefault();
         if (tags.length >= 10) {
           showToastError('태그는 최대 10개까지만 달 수 있습니다');
-          updateTagsInput();
+          clearTagsInput();
           return;
         }
         const cleanValue = value.endsWith(',') ? value.slice(0, -1).trim() : value;
@@ -630,34 +677,89 @@ function initializeTagInput() {
           tags.push(cleanValue);
           updateTagUI(tags);
         } else {
-          updateTagsInput();
+          clearTagsInput();
         }
+        // 자동완성 닫기
+        if (list) list.classList.add('hidden');
       } else if (e.key === 'Backspace' && tagsInput.value === '') {
         if (tags.length > 0) {
           tags.pop();
           updateTagUI(tags);
         }
+        // 자동완성 닫기
+        if (list) list.classList.add('hidden');
       }
     });
-    // 이벤트 리스너 2: 태그 입력창 클릭 시 포커스 이동
+    // 자동완성 후보 필터링 및 렌더링
+    tagsInput.addEventListener('input', () => {
+      const list = document.getElementById('autocomplete-list');
+      const value = tagsInput.value.trim().toLowerCase();
+      if (!list) return;
+      list.innerHTML = '';
+      if (!value) {
+        list.classList.add('hidden');
+        return;
+      }
+      const matches = allTagCandidates.filter(tag =>
+        tag.toLowerCase().includes(value) && !tags.includes(tag)
+      ).slice(0, 3);
+      if (matches.length === 0) {
+        list.classList.add('hidden');
+        return;
+      }
+      matches.forEach((tag, idx) => {
+        const li = document.createElement('li');
+        li.textContent = tag;
+        li.tabIndex = 0;
+        // 자동완성 항목 클릭 시 클릭 플래그 설정 (blur 이벤트 발생 시 중복 태그 추가 방지를 위함)
+        li.addEventListener('mousedown', () => {
+          autocompleteClicked = true;
+        });
+        li.addEventListener('click', () => {
+          clearTagsInput()
+          if (!tags.includes(tag) && tags.length < 10) {
+            clearTagsInput();
+            tags.push(tag);
+            updateTagUI(tags);
+          } else if (tags.length >= 10) {
+            showToastError('태그는 최대 10개까지만 달 수 있습니다');
+          }
+          list.classList.add('hidden');
+        });
+        list.appendChild(li);
+      });
+      list.classList.remove('hidden');
+    });
+    // 이벤트 리스너: 태그 입력창 클릭 시 포커스 이동
     const container = tagsInput.closest('.tag-input-container');
     if (container) {
       container.addEventListener('click', (e) => {
         if (e.target === container) tagsInput.focus();
       });
     }
-    // 이벤트 리스너 3: 태그 입력창 비활성화(바깥 부분 클릭 등) 시 태그 추가
+    // 자동완성 클릭 여부 플래그
+    let autocompleteClicked = false;
+    // 이벤트 리스너: 태그 입력창 비활성화(바깥 부분 클릭 등) 시 태그 추가
     tagsInput.addEventListener('blur', () => {
-      const value = tagsInput.value.trim();
-      if (value && tags.length < 10 && !tags.includes(value)) {
-        tags.push(value);
-        updateTagUI(tags);
-      } else if (tags.length >= 10) {
-        showToastError('태그는 최대 10개까지만 달 수 있습니다');
-        updateTagsInput();
-      } else {
-        updateTagsInput(); // 중복 태그 입력 시 입력창 초기화
-      }
+      setTimeout(() => {
+        const list = document.getElementById('autocomplete-list');
+        if (list) list.classList.add('hidden');
+        // 자동완성 항목을 클릭할 경우는 blur 이벤트 발생으로 인한 태그 추가를 방지
+        if (autocompleteClicked) {
+          autocompleteClicked = false;
+          return;
+        }
+        const value = tagsInput.value.trim();
+        if (value && tags.length < 10 && !tags.includes(value)) {
+          tags.push(value);
+          updateTagUI(tags);
+        } else if (tags.length >= 10) {
+          showToastError('태그는 최대 10개까지만 달 수 있습니다');
+          clearTagsInput();
+        } else {
+          clearTagsInput();
+        }
+      }, 100); // 클릭 이벤트 등과 충돌 방지
     });
   }
 
@@ -1323,7 +1425,12 @@ document.addEventListener('DOMContentLoaded', () => {
   reRenderHistorySearch();
   downloadHistory();
   // 6. 태그 UI 초기화 함수 호출
-  initializeTagInput();
+  setupTagInputUI();
   // Windows인 경우에만 스크롤바 설정을 적용
   setScrollbarWin();
+  // 팝업 실행 직후 태그 입력창에 포커스
+  const tagsInput = document.getElementById('tags-input');
+  if (tagsInput) {
+    tagsInput.focus();
+  }
 });

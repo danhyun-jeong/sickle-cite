@@ -73,6 +73,7 @@ input, textarea, select, button {
     margin-bottom: var(--spacing);
 }
 .pane-section:last-child {
+    position: relative;
     margin-bottom: 0;
 }
 .right-pane {
@@ -666,7 +667,7 @@ input[type="radio"]:checked::before {
     cursor: text;
     position: relative;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     white-space: nowrap;
     max-width: 228.5px;
 }
@@ -803,4 +804,43 @@ input[type="radio"]:checked::before {
 .win-scrollbar.show-scrollbar::-webkit-scrollbar-thumb {
     background-color: rgba(101, 103, 105, 0.8); /* 약간 투명한 accent */
     border-radius: 3px;
+}
+/* 태그 입력 자동완성 드롭다운 */
+.autocomplete-list {
+    position: absolute;
+    bottom: 55%;
+    left: 9.5%;
+    width: 80%;
+    max-height: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    overflow-y: auto;
+    margin: 0 0 0 0;
+    padding: 0;
+    list-style: none;
+    z-index: 100;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.autocomplete-list.hidden {
+  display: none;
+}
+
+.autocomplete-list li {
+  padding: 6px 10px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+/* .autocomplete-list li:not(:last-child):not(:first-child) {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+} */
+
+.autocomplete-list li:hover,
+.autocomplete-list li.active {
+  background-color: #e9eff8;
 }
