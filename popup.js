@@ -333,6 +333,7 @@ function isSameArticleBase(a, b) {
     metaA.year === metaB.year
   );
 }
+
 // popup 실행(현재 페이지에서 추출) 시 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
 function syncTagsFromDuplicate(pageInfo) {
   chrome.storage.local.get({ history: [] }, items => {
@@ -347,6 +348,36 @@ function syncTagsFromDuplicate(pageInfo) {
       }
     }
   });
+}
+
+// Windows인 경우에만 스크롤바 설정을 적용하는 함수
+function setScrollbarWin() {
+  if (navigator.platform.startsWith('Win')) {
+    const scrollTargets = [
+      '#tab1 .left-pane .metadata-container',
+      '#tab1 .right-pane .citation-input',
+      '#tab1 .right-pane .tag-input-container',
+      '#tab2 #history-list',
+      '#tab3-scroll-area'
+    ];
+
+    scrollTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) {
+        el.classList.add('win-scrollbar', 'hide-scrollbar');
+        let timeoutId;
+        el.addEventListener('scroll', () => {
+          el.classList.add('show-scrollbar');
+          el.classList.remove('hide-scrollbar');
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            el.classList.remove('show-scrollbar');
+            el.classList.add('hide-scrollbar');
+          }, 1000);
+        });
+      }
+    });
+  }
 }
 
 // 메타데이터 처리 -----------------------
@@ -1291,35 +1322,8 @@ document.addEventListener('DOMContentLoaded', () => {
   reRenderHistoryCheck();
   reRenderHistorySearch();
   downloadHistory();
-
-  // 태그 UI 초기화 함수 호출
+  // 6. 태그 UI 초기화 함수 호출
   initializeTagInput();
-
   // Windows인 경우에만 스크롤바 설정을 적용
-  if (navigator.platform.startsWith('Win')) {
-    const scrollTargets = [
-      '#tab1 .left-pane .metadata-container',
-      '#tab1 .right-pane .citation-input',
-      '#tab1 .right-pane .tag-input-container',
-      '#tab2 #history-list',
-      '#tab3-scroll-area'
-    ];
-
-    scrollTargets.forEach(selector => {
-      const el = document.querySelector(selector);
-      if (el) {
-        el.classList.add('win-scrollbar', 'hide-scrollbar');
-        let timeoutId;
-        el.addEventListener('scroll', () => {
-          el.classList.add('show-scrollbar');
-          el.classList.remove('hide-scrollbar');
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(() => {
-            el.classList.remove('show-scrollbar');
-            el.classList.add('hide-scrollbar');
-          }, 1000);
-        });
-      }
-    });
-  }
+  setScrollbarWin();
 });
