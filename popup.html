@@ -64,9 +64,20 @@
 
   <!-- Tab 2 -->
   <div id="tab2" class="tab-content">
-    <div class="search-box"><input id="search-history" type="text" placeholder="내역 검색"/></div>
+    <div class="search-box">
+      <div class="search-input-wrapper">
+        <input id="search-history" type="text" placeholder="내역 검색"/>
+        <button id="clear-search" class="clear-search-btn" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </button>
+      </div>
+    </div>
     <div id="history-list" style="height:350px; overflow-y:auto;"></div>
-    <div class="checkbox-area">
+    <div class="toggle-switch-area">
       <button id="delete-history-all" type="button">내역 전체 삭제</button>
       <button id="download-history" type="button">서지정보 내역을 엑셀로 다운로드</button>
       <label class="checkbox-label" title="논문의 저자, 제목, 학술지명, 발간기관, 연도가 정확히 일치할 경우 같은 논문이라고 판단합니다">

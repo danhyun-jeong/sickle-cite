@@ -163,7 +163,10 @@ textarea:focus,
     gap: 8px;
     padding: var(--spacing) 0 0 0;
 }
-.actions button {
+.actions button,
+#copy-metadata-btn,
+#save-metadata-btn,
+#copy-citation-btn {
     padding: 4px 12px;
     font-size: 13px;
     color: var(--accent);
@@ -173,7 +176,10 @@ textarea:focus,
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
 }
-.actions button:hover {
+.actions button:hover,
+#copy-metadata-btn:hover,
+#save-metadata-btn:hover,
+#copy-citation-btn:hover {
     background: var(--accent);
     color: var(--bg);
 }
@@ -220,15 +226,57 @@ table td {
     font-size: 13px;
     color: var(--text);
 }
-.search-box input {
+.search-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 18px;
+}
+
+.search-input-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.search-input-wrapper input {
     margin-top: var(--spacing);
     margin-bottom: var(--spacing);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 6px;
-    width: 97%;
+    width: 100%;
     font-size: 14px;
+    padding-right: 30px; /* 삭제 버튼을 위한 공간 */
 }
+
+.clear-search-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.clear-search-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.clear-search-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
 #tab1 .left-pane {
     position: relative;
     display: flex;
@@ -383,7 +431,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     padding-bottom: 10px !important;
 }
 
-#tab2 .checkbox-area {
+#tab2 .toggle-switch-area {
     padding-top: 15px;
     display: flex;
     justify-content: space-between;
@@ -391,17 +439,17 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     color: var(--text-secondary);
 }
 
-#tab2 .checkbox-area .checkbox-label {
+#tab2 .toggle-switch-area .checkbox-label {
     display: flex;
     align-items: center;
 }
 
-#tab2 .checkbox-area input:not(.toggle-switch input),
-#tab2 .checkbox-area label:not(.checkbox-label) {
+#tab2 .toggle-switch-area input:not(.toggle-switch input),
+#tab2 .toggle-switch-area label:not(.checkbox-label) {
     margin-right: 9px;
     vertical-align: middle;
 }
-#tab2 .checkbox-area button {
+#tab2 .toggle-switch-area button {
     justify-content: flex-start;
     font-size: 12px;
     color: var(--accent);
@@ -411,7 +459,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
 }
-#tab2 .checkbox-area button:hover {
+#tab2 .toggle-switch-area button:hover {
     background: var(--accent);
     color: var(--bg);
 }
@@ -459,13 +507,10 @@ text-align: center;
 }
 
 /* 스크롤바를 10px 오른쪽으로 당기는 방법 */
-.search-box {
-    padding-right: 10px;
-}
 #history-list {
     padding-right: 10px;
 }
-.checkbox-area {
+.toggle-switch-area {
     padding-right: 10px;
 }
 #tab2.tab-content.active {

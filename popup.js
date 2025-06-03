@@ -47,7 +47,7 @@ function updateVolIssOptions() {
         <div class="field"><label>구분 없을 시 단위:</label><input type="text" name="either-suffix" value="호"></div>
         <div class="field">
           <label class="checkbox-label">
-            <span class="toggle-text">권호수 앞에 접두사 ‘제’ 붙이기</span>
+            <span class="toggle-text">권호수 앞에 접두사 ‘제' 붙이기</span>
             <span class="toggle-switch">
               <input type="checkbox" name="prefix-제" checked>
               <span class="slider"></span>
@@ -1376,16 +1376,30 @@ function renderHistory() {
 }
 // 히스토리 3. 체크박스 클릭 시 히스토리 다시 렌더
 function reRenderHistoryCheck() {
-  const dedupCheckbox = document.getElementById('deduplicate');
-  if (dedupCheckbox) {
-    dedupCheckbox.addEventListener('change', renderHistory);
+  const dedupToggleSwitch = document.getElementById('deduplicate');
+  if (dedupToggleSwitch) {
+    dedupToggleSwitch.addEventListener('change', renderHistory);
   }
 }
 // 히스토리 4. 검색창에 입력 감지될 때마다 히스토리 다시 렌더
 function reRenderHistorySearch() {
   const searchInput = document.getElementById('search-history');
+  const clearButton = document.getElementById('clear-search');
+  
   if (searchInput) {
-    searchInput.addEventListener('input', renderHistory);
+    // 입력값 변경 시 삭제 버튼 표시/숨김 처리
+    searchInput.addEventListener('input', () => {
+      clearButton.style.display = searchInput.value ? 'flex' : 'none';
+      renderHistory();
+    });
+    
+    // 삭제 버튼 클릭 시 입력값 초기화
+    clearButton.addEventListener('click', () => {
+      searchInput.value = '';
+      clearButton.style.display = 'none';
+      renderHistory();
+      searchInput.focus();
+    });
   }
 }
 // 히스토리 5. 다운로드 버튼을 누르면 히스토리를 엑셀로 다운로드
