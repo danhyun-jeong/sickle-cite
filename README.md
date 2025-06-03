@@ -139,13 +139,13 @@ BETA 1.6.2 버전을 크롬 웹 스토어를 통해 브라우저에 바로 설�
 - 한글의 초성+중성+종성 조합 구조를 고려한 fuzzy 검색을 지원합니다. 그렇기에, 예컨대 ‘국ㅁ’까지만 쳤을 때에도 ‘국민국가’를 검색해낼 수 있고 ‘굯’까지만 쳤을 때에도 ‘국수주의’를 검색해낼 수 있습니다.
 - 태그 역시 검색이 됩니다. 태그로 검색하면 해당 태그가 달려 있는 논문을 한 데 모아 볼 수 있습니다.
 
+#### 하단 버튼 및 스위치
+
 <p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/0a303310-d856-4935-928e-4185ea997be6" /></p>
 
 <p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/4b9dc9f0-1165-4216-b602-5e2a0f024119" /></p>
 
 <p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/9920d346-7ee1-4965-939d-af7963f63bd4" /></p>
-
-#### 하단 버튼 및 스위치
 
 1. 팝업 창의 맨 아래 오른쪽에는 "같은 논문이 중복될 경우 첫 번째만 표시" 토글 스위치와 "[학술 DB], [추출 일시] 열 숨기기" 토글 스위치가 있습니다.
 	1. "같은 논문이 중복될 경우 첫 번째만 표시" 토글 스위치
