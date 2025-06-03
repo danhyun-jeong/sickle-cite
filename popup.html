@@ -78,15 +78,26 @@
     </div>
     <div id="history-list" style="height:350px; overflow-y:auto;"></div>
     <div class="toggle-switch-area">
-      <button id="delete-history-all" type="button">내역 전체 삭제</button>
-      <button id="download-history" type="button">서지정보 내역을 엑셀로 다운로드</button>
-      <label class="checkbox-label" title="논문의 저자, 제목, 학술지명, 발간기관, 연도가 정확히 일치할 경우 같은 논문이라고 판단합니다">
-        <span class="toggle-text">같은 논문이 중복될 경우 첫 번째만 표시</span>
-        <span class="toggle-switch">
-          <input id="deduplicate" type="checkbox" checked>
-          <span class="slider"></span>
-        </span>
-      </label>
+      <button id="download-history" style="display: none;" type="button">서지정보 내역을 엑셀로 다운로드</button>
+      <button id="delete-history-selected" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> 삭제</button>
+      <button id="copy-citations-selected" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> 인용 표기 복사</button>
+      <button id="export-bibliography-selected" type="button"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> 서지사항 내보내기</button>
+      <div class="toggle-controls">
+        <label class="checkbox-label" title="논문의 저자, 제목, 학술지명, 발간기관, 연도가 정확히 일치할 경우 같은 논문이라고 판단합니다">
+          <span class="toggle-text">같은 논문이 중복될 경우 첫 번째만 표시</span>
+          <span class="toggle-switch">
+            <input id="deduplicate" type="checkbox" checked>
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="checkbox-label" title="[학술 DB], [추출 일시] 열을 숨겨서 논문 제목 등의 정보를 더 많이 나타냅니다.">
+          <span class="toggle-text">[학술 DB], [추출 일시] 열 숨기기</span>
+          <span class="toggle-switch">
+            <input id="hide-5-6-columns" type="checkbox">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -156,12 +167,39 @@
     </div>
   </div>
   <div id="custom-tooltip" class="hidden"></div>
-  <!-- 모달 -->
-  <div id="delete-confirm" class="modal hidden">
+  <!-- 선택 삭제 모달 -->
+  <div id="delete-selected-confirm" class="modal hidden">
     <div class="modal-content">
-      <p>지금까지 저장된 논문 서지정보 추출 내역이 전부 삭제됩니다.<br>진행하시겠습니까?</p>
-      <button id="confirm-yes">예</button>
-      <button id="confirm-no">아니요</button>
+      <p>내역에서 삭제한 항목은 다시 복원할 수 없습니다.<br>정말 삭제하시겠습니까?</p>
+      <button id="confirm-selected-yes">예</button>
+      <button id="confirm-selected-no">아니요</button>
+    </div>
+  </div>
+  <!-- 인용 표기 복사 모달 -->
+  <div id="copy-citations-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>클립보드에 복사할 인용 표기 예시</h3>
+      <div id="citation-example" class="citation-example"></div>
+      <p class="citation-instructions">💡 인용 양식을 바꾸고 싶을 경우, [⚙️ 설정] 탭에서 설정을 변경하세요.</p>
+      <button id="copy-citations-confirm">클립보드에 복사</button>
+      <button id="copy-citations-cancel">취소</button>
+    </div>
+  </div>
+  <!-- 서지사항 내보내기 모달 -->
+  <div id="export-bibliography-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>서지사항을 내보낼 파일 형식을 선택하세요</h3>
+      <div class="export-options">
+        <div class="export-option">
+          <button id="export-excel" class="export-option-button">엑셀 파일로 다운로드</button>
+          <p class="export-description">💡 각 항목(논문)에 대한 모든 정보(서지사항, 추출한 DB, URL, 추출 일시뿐 아니라 조합된 인용 표기, 태그까지)를 엑셀 파일로 저장합니다.</p>
+        </div>
+        <div class="export-option">
+          <button id="export-ris" class="export-option-button">.ris 파일로 다운로드</button>
+          <p class="export-description">💡 RIS는 서지정보를 기록하는 파일 형식입니다. 이 형식으로 저장한 뒤 해당 파일을 Endnote, Mendeley, Zotero, Citeasy 등의 서지관리 프로그램에서 가져오기(import)하여 다수의 서지정보를 일괄 등록할 수 있습니다.</p>
+        </div>
+      </div>
+      <button id="export-cancel">취소</button>
     </div>
   </div>
   <script src="popup.js"></script>

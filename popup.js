@@ -1,6 +1,7 @@
 // 전역
 let currentMetadataGlobal = {};
-let currentTimestampIdGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위함
+let currentTimestampIdGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위한 전역변수
+let selectedHistoryItems = new Set(); // 탭2에서 선택된 항목들의 timestampId를 저장
 
 // ----------------------------------------------------------------
 
@@ -47,7 +48,7 @@ function updateVolIssOptions() {
         <div class="field"><label>구분 없을 시 단위:</label><input type="text" name="either-suffix" value="호"></div>
         <div class="field">
           <label class="checkbox-label">
-            <span class="toggle-text">권호수 앞에 접두사 ‘제' 붙이기</span>
+            <span class="toggle-text">권호수 앞에 접두사 '제' 붙이기</span>
             <span class="toggle-switch">
               <input type="checkbox" name="prefix-제" checked>
               <span class="slider"></span>
@@ -319,10 +320,11 @@ function showToastError(message) {
   }, 1500);
 }
 
-// ----------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
 
 // ** 함수 **
 
+// 메타데이터가 주어졌을 때 이를 텍스트로 변환하는 함수
 function getMetadataText(meta) {
   const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join(', ') : (meta.authors || '');
   const keywordsList = Array.isArray(meta.keywords) ? meta.keywords.join(', ') : (meta.keywords || '');
@@ -358,22 +360,6 @@ function isSameArticleBase(a, b) {
     metaA.year === metaB.year
   );
 }
-
-// // popup 실행(현재 페이지에서 추출) 시 이미 저장된 논문이면 알림을 띄우고 태그 UI 자동 채움
-// function syncTagsFromDuplicate(pageInfo) {
-//   chrome.storage.local.get({ history: [] }, items => {
-//     const matchedItem = items.history.find(item => isSameArticleBase(item, pageInfo));
-//     if (matchedItem) {
-//       showToast('동일한 논문의 서지정보를 이전에 추출한 적이 있습니다');
-//       if (matchedItem.projectTags && Array.isArray(matchedItem.projectTags)) {
-//         if (typeof window.updateTagUI === "function") {
-//           window.updateTagUI(matchedItem.projectTags);
-//           saveTags(matchedItem.projectTags);
-//         }
-//       }
-//     }
-//   });
-// }
 
 // popup 실행 후, 동일 논문 중 가장 이른 내역의 메타데이터와 태그를 불러와서 필드에 채움
 function applyEarliestDuplicate(pageInfo) {
@@ -429,6 +415,8 @@ function setScrollbarWin() {
     });
   }
 }
+
+//////////////////////////////////////////////////////////////////////////////
 
 // 메타데이터 처리 -----------------------
 
@@ -571,6 +559,8 @@ async function fetchCurrentMetadata() {
   // 이때 결과는 updateCurrentMetadata에 의해 사용자의 직접 수정을 반영한 currentMetadata임
   // 이후 이는 다시 전역변수 currentMetadataGlobal에 저장될 것임
 }
+
+//////////////////////////////////////////////////////////////////////////////
 
 // 태그 처리 -----------------------
 
@@ -845,6 +835,950 @@ function setupTagInputUI() {
   window.updateTagUI = updateTagUI;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+
+// 인용 처리 -----------------------
+
+// 인용 1: 메타데이터와 인용 양식 설정값을 조합해 최종적인 인용(citation)을 도출
+function getCombinedCitation(meta, style) {
+  // 서브타이틀이 없으면 구분 기호 제거
+  const checkedSeparator = meta.title_sub ? style.titleSeparator : '';
+  const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join('·') : meta.authors;
+  const hasVol = meta.volume !== '';
+  const hasIss = meta.issue !== '';
+  let pageRangePart = '';
+  if (style.pageRangeInclude) {
+    pageRangePart = `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
+  }
+  let combinedCitation = '';
+  // 권수와 호수 둘 다 있을 경우
+  if (hasVol && hasIss) {
+    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
+  // 권수와 호수 둘 중 하나만 있을 경우
+  } else if (hasVol || hasIss) {
+    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
+  } else {
+    // 학술지명 값이 비어 있을 경우(학위논문일 경우 등) 학술지명 부분 전체를 제거 ("『』, "이 나타나지 않도록)
+    if (!meta.journal_name) {
+      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
+    } else {
+      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
+    }
+  }
+  return combinedCitation;
+}
+
+// 인용 2: 탭1 우측 textarea에 조합된 citation을 삽입 -> 이벤트 리스너가 있는 다른 함수에서 호출
+function fillCitation(meta) {
+  const textarea = document.querySelector('.citation-input');
+  if (
+    !meta ||
+    Object.values(meta).every(
+      v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+    )
+  ) {
+    if (textarea) textarea.value = '';
+    return;
+  }
+  const style = getStyleSettings();
+  const combinedCitation = getCombinedCitation(meta, style);
+  if (textarea) textarea.value = combinedCitation;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+// 히스토리 처리 -----------------------
+
+// 히스토리 1: 히스토리에 pageInfo 추가(저장)
+function savePageInfoToHistory(pageInfo) {
+  chrome.storage.local.get({ history: [] }, items => {
+    const merged = items.history.concat(pageInfo);
+    // 같은 논문인지 판별하는 함수
+    function isSameArticle(a, b) {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      if (aKeys.length !== bKeys.length) return false;
+      return aKeys.every(key => {
+        const valA = a[key];
+        const valB = b[key];
+        if (Array.isArray(valA) && Array.isArray(valB)) {
+          return valA.length === valB.length && valA.every((v, i) => v === valB[i]);
+        }
+        return valA === valB;
+      });
+    }
+    // 중복 제거
+    const uniqueHistory = [];
+    merged.forEach(item => {
+      const exists = uniqueHistory.some(u =>
+        u.academicDB === item.academicDB &&
+        u.url === item.url &&
+        u.timestamp === item.timestamp &&
+        isSameArticle(u.metadata, item.metadata)
+      );
+      if (!exists) uniqueHistory.push(item);
+    });
+    // 저장
+    chrome.storage.local.set({ history: uniqueHistory }, () => {
+      console.log('히스토리 저장 및 중복 제거 완료:', uniqueHistory);
+      // 저장 후 UI 갱신
+      renderHistory();
+    });
+  });
+}
+
+// 히스토리 2: 탭2에 히스토리 표 생성
+function renderHistory() {
+  chrome.storage.local.get({ history: [] }, items => {
+    // 히스토리 데이터 불러오기
+    const rawHistory = items.history.slice();
+    // 검색 필터링 (공백 단위 분할, 모든 키워드 포함 여부)
+    const searchValue = document.getElementById('search-history')?.value.trim().toLowerCase() || '';
+    const terms = searchValue.split(/\s+/).filter(Boolean);
+    const baseHistory = terms.length
+      ? rawHistory.filter(item => {
+          const metaValues = Object.values(item.metadata).flatMap(v => Array.isArray(v) ? v : [v]);
+          const tagValues = Array.isArray(item.projectTags) ? item.projectTags : [];
+          const haystack = [...metaValues, ...tagValues].join(' ');
+          return terms.every(term => Hangul.search(haystack, term) !== -1);
+        })
+      : rawHistory;
+    // 체크박스 상태에 따라 중복 처리 분기
+    const isDedup = document.getElementById('deduplicate')?.checked;
+    const hideColumns = document.getElementById('hide-5-6-columns')?.checked;
+    
+    // 탭2에 hide-columns 클래스 추가/제거
+    const tab2 = document.getElementById('tab2');
+    if (tab2) {
+      if (hideColumns) {
+        tab2.classList.add('hide-columns');
+      } else {
+        tab2.classList.remove('hide-columns');
+      }
+    }
+    
+    const history = isDedup
+      ? deduplicateHistory(baseHistory)        // timestamp 제외 기준 중복 제거
+      : deduplicateFullHistory(baseHistory);   // 전체 필드 기준 중복 제거 (timestamp 포함)
+    // timestampId 기준 내림차순 정렬 (밀리초 단위 정확도)
+    history.sort((a, b) => b.timestampId - a.timestampId);
+    const container = document.getElementById('history-list');
+    if (!container) return;
+    container.innerHTML = '';
+    container.style.position = 'relative';
+    container.style.maxHeight = '343px';   // 최대 높이를 500px로 제한
+    container.style.overflowY  = 'auto';   // 넘칠 때 세로 스크롤 활성화
+    container.style.minHeight = '300px';   // 최소 높이
+    container.style.paddingBottom = '20px';   // 체크박스 뒤로 내용이 스크롤되지 않도록 여유 공간 확보
+    const table = document.createElement('table');
+    table.style.border = 'none';
+    table.style.width = '100%';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    
+    // 체크박스 헤더 추가
+    const thCheck = document.createElement('th');
+    thCheck.style.border = 'none';
+    thCheck.style.padding = '6px';
+    thCheck.style.width = '30px';
+    const headerCheckbox = document.createElement('input');
+    headerCheckbox.type = 'checkbox';
+    headerCheckbox.id = 'select-all';
+    headerCheckbox.style.margin = '0';
+    thCheck.appendChild(headerCheckbox);
+    headerRow.appendChild(thCheck);
+    
+    // 헤더 생성 - hide-5-6-columns 상태에 따라 조건부 렌더링
+    const headerTexts = hideColumns 
+      ? ['저자','논문 제목','태그']
+      : ['저자','논문 제목','태그','학술 DB','추출 일시'];
+    
+    headerTexts.forEach(text => {
+      const th = document.createElement('th');
+      th.textContent = text;
+      th.style.border = 'none';
+      th.style.textAlign = 'left';
+      th.style.padding = '6px';
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    
+    // 전체 선택 체크박스 이벤트 리스너
+    headerCheckbox.addEventListener('change', () => {
+      const checkboxes = tbody.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = headerCheckbox.checked;
+        // 체크박스 상태 저장
+        const timestampId = checkbox.dataset.timestampId;
+        if (checkbox.checked) {
+          selectedHistoryItems.add(timestampId);
+        } else {
+          selectedHistoryItems.delete(timestampId);
+        }
+      });
+      updateDeleteButtonVisibility();
+      updateHeaderCheckboxState();
+    });
+    
+    history.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.style.border = 'none';
+      
+      // 체크박스 셀 추가
+      const tdCheck = document.createElement('td');
+      tdCheck.style.border = 'none';
+      tdCheck.style.padding = '6px';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.style.margin = '0';
+      checkbox.dataset.timestampId = item.timestampId;
+      
+      // 저장된 상태에서 체크 여부 복원
+      checkbox.checked = selectedHistoryItems.has(item.timestampId.toString());
+      
+      checkbox.addEventListener('change', () => {
+        // 체크박스 상태 저장
+        if (checkbox.checked) {
+          selectedHistoryItems.add(item.timestampId.toString());
+        } else {
+          selectedHistoryItems.delete(item.timestampId.toString());
+        }
+        updateDeleteButtonVisibility();
+        updateHeaderCheckboxState();
+      });
+      tdCheck.appendChild(checkbox);
+      tr.appendChild(tdCheck);
+      
+      // 저자 표시 규칙 수정: 공저자일 때 처음 1명 + ' 외'
+      const authorsArray = Array.isArray(item.metadata.authors) ? item.metadata.authors : item.metadata.authors ? [item.metadata.authors] : [];
+      let authorText = '';
+      if (authorsArray.length >= 2) {
+        authorText = authorsArray[0] + ' 외';
+      } else {
+        authorText = authorsArray.join(', ');
+      }
+      // 제목 정보 불러오기
+      const titleMain = item.metadata.title_main || ''; // 표에서는 이것만 씀
+      const titleSub = item.metadata.title_sub || '';
+      const styleSettings = getStyleSettings();
+      const checkedSeparator = item.metadata.title_sub ? styleSettings.titleSeparator : '';
+      const fullTitle = `${titleMain}${checkedSeparator}${titleSub}`; // 툴팁용
+      
+      // 데이터 셀 생성 - hide-5-6-columns 상태에 따라 조건부 렌더링
+      const columnsToRender = hideColumns 
+        ? ['author', 'title', 'tag']
+        : ['author', 'title', 'tag', 'db', 'time'];
+      
+      columnsToRender.forEach((columnType, idx) => {
+        const td = document.createElement('td');
+        td.style.border = 'none';
+        td.style.padding = '6px';
+        
+        // 제1열: 저자
+        if (columnType === 'author') {
+          td.textContent = authorText;
+          td.title = Array.isArray(item.metadata.authors) //툴팁(기본)
+            ? item.metadata.authors.join(', ')
+            : (item.metadata.authors || '');
+          td.dataset.tooltip = td.title;
+          // 클릭 시 탭1으로 전환 후 데이터 채우기
+          td.style.cursor = 'pointer';
+          td.addEventListener('click', () => {
+            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
+            if (tab1Btn) tab1Btn.click();
+            currentMetadataGlobal = item.metadata;
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
+            fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
+          });
+        // 제2열: 제목
+        } else if (columnType === 'title') {
+          // 제목 셀: line-clamp 적용을 위한 div 래퍼 생성
+          const titleDiv = document.createElement('div');
+          titleDiv.className = 'clamp-title';
+          // hide-5-6-columns가 on이면 fullTitle, off이면 titleMain 사용
+          titleDiv.textContent = hideColumns ? fullTitle : titleMain;
+          td.appendChild(titleDiv);
+          td.title = fullTitle; //툴팁(기본) 툴팁에서는 전체 제목을 보여줌
+          td.dataset.tooltip = titleMain;
+          // 클릭 시 탭1으로 전환 후 데이터 채우기
+          td.style.cursor = 'pointer';
+          td.addEventListener('click', () => {
+            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
+            if (tab1Btn) tab1Btn.click();
+            currentMetadataGlobal = item.metadata;
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
+            fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
+          });
+        // 제3열: 태그
+        } else if (columnType === 'tag') {
+          const tagsArray = Array.isArray(item.projectTags) ? item.projectTags : [];
+          td.innerHTML = '';
+          if (tagsArray.length > 0) {
+            // 첫 번째 태그만 표시 (최대 8자 + …)
+            const firstTag = document.createElement('span');
+            firstTag.className = 'history-tag-chip';
+            const raw = tagsArray[0];
+            const truncated = raw.length > 8 ? raw.slice(0, 8) + '…' : raw;
+            firstTag.textContent = truncated;
+
+            // 태그 배지용 wrapper div 추가
+            const tagWrapper = document.createElement('div');
+            tagWrapper.style.position = 'relative';
+            tagWrapper.style.display = 'inline-block';
+            tagWrapper.appendChild(firstTag);
+
+            if (tagsArray.length > 1) {
+              const badge = document.createElement('span');
+              badge.className = 'tag-badge';
+              badge.textContent = `+${tagsArray.length - 1}`;
+              tagWrapper.appendChild(badge);
+            }
+
+            td.appendChild(tagWrapper);
+            td.title = tagsArray.join(', ');
+          } else {
+            td.textContent = '';
+            td.title = '태그 없음';
+          }
+          td.style.color = tagsArray.length > 0 ? 'var(--accent)' : 'var(--text-secondary)';
+          td.style.fontSize = '12px';
+          td.style.cursor = 'pointer';
+          // 클릭 시 탭1으로 전환 후 데이터 채우기 (다른 열과 동일한 동작)
+          td.addEventListener('click', () => {
+            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
+            if (tab1Btn) tab1Btn.click();
+            currentMetadataGlobal = item.metadata;
+            try {
+              fillMetadataField(item.metadata);
+              currentTimestampIdGlobal = item.timestampId;
+              loadProjectTags(); // 태그 로딩 추가
+            } catch (err) {
+              console.error('fillMetadataField error:', err);
+              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
+              return;
+            }
+            updateCurrentMetadata(currentMetadataGlobal);
+            fillCitation(currentMetadataGlobal);
+            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
+          });
+        // 제4열: 학술 DB
+        } else if (columnType === 'db') {
+          const a = document.createElement('a');
+          a.href = item.url;
+          a.textContent = item.academicDB;
+          a.target = '_blank';
+          a.title = '검색 결과 페이지 바로가기'; //툴팁(기본)
+          td.appendChild(a);
+        //제5열: 추출 일시
+        } else if (columnType === 'time') {
+          // 분 단위까지만 표시 (초 단위 제거)
+          td.textContent = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+    
+    // 초기 상태에서는 삭제 버튼 숨기기
+    updateDeleteButtonVisibility();
+    updateHeaderCheckboxState();
+  });
+}
+
+// 히스토리 a-1. metadata 기준 중복 제거 (가장 이른 timestamp만 남김)
+function deduplicateHistory(historyArray) {
+  const groups = {};
+  historyArray.forEach(item => {
+    const key = JSON.stringify({
+      authors: item.metadata.authors,
+      title_main: item.metadata.title_main,
+      title_sub: item.metadata.title_sub,
+      journal_name: item.metadata.journal_name,
+      publisher: item.metadata.publisher,
+      year: item.metadata.year
+    });
+    if (!groups[key] || item.timestamp.localeCompare(groups[key].timestamp) < 0) {
+      groups[key] = item;
+    }
+  });
+  return Object.values(groups);
+}
+
+// 히스토리 a-2. metadata, academicDB, url, timestamp 모두 포함하여 완전 동일 항목만 중복 제거 (가장 이른 timestamp 유지)
+function deduplicateFullHistory(historyArray) {
+  const groups = {};
+  historyArray.forEach(item => {
+    const key = JSON.stringify(item);
+    if (!groups[key] || item.timestamp.localeCompare(groups[key].timestamp) < 0) {
+      groups[key] = item;
+    }
+  });
+  return Object.values(groups);
+}
+
+// 히스토리 b-1. 체크박스 상태에 따라 버튼 표시/숨김 처리
+function updateDeleteButtonVisibility() {
+  const deleteButton = document.getElementById('delete-history-selected');
+  const copyButton = document.getElementById('copy-citations-selected');
+  const exportButton = document.getElementById('export-bibliography-selected');
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]');
+  const hasChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+  
+  deleteButton.style.display = hasChecked ? 'flex' : 'none';
+  copyButton.style.display = hasChecked ? 'flex' : 'none';
+  exportButton.style.display = hasChecked ? 'flex' : 'none';
+}
+
+// 히스토리 b-2. 헤더 체크박스 상태 업데이트 함수
+function updateHeaderCheckboxState() {
+  const headerCheckbox = document.getElementById('select-all');
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]');
+  
+  if (!headerCheckbox || checkboxes.length === 0) return;
+  
+  const checkedCount = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
+  
+  if (checkedCount === 0) {
+    // 아무것도 선택되지 않음
+    headerCheckbox.checked = false;
+    headerCheckbox.indeterminate = false;
+  } else if (checkedCount === checkboxes.length) {
+    // 모두 선택됨
+    headerCheckbox.checked = true;
+    headerCheckbox.indeterminate = false;
+  } else {
+    // 일부만 선택됨 (indeterminate 상태)
+    headerCheckbox.checked = false;
+    headerCheckbox.indeterminate = true;
+  }
+}
+
+// 히스토리 b-3. 선택된 항목 삭제
+function deleteSelectedHistoryItems() {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  chrome.storage.local.get({ history: [] }, items => {
+    const filtered = items.history.filter(item => !selectedIds.includes(item.timestampId.toString()));
+    chrome.storage.local.set({ history: filtered }, () => {
+      // 삭제된 항목들을 selectedHistoryItems에서도 제거
+      selectedIds.forEach(id => selectedHistoryItems.delete(id));
+      showToast('선택한 항목이 삭제되었습니다');
+      renderHistory();
+    });
+  });
+}
+
+// 히스토리 b-4. 체크박스 클릭 시 히스토리 다시 렌더
+function reRenderHistoryCheck() {
+  const dedupToggleSwitch = document.getElementById('deduplicate');
+  const hideColumnsToggleSwitch = document.getElementById('hide-5-6-columns');
+  
+  if (dedupToggleSwitch) {
+    dedupToggleSwitch.addEventListener('change', (e) => {
+      // deduplicate를 off하려고 하는데 hide-5-6-columns가 on인 경우
+      if (!e.target.checked && hideColumnsToggleSwitch.checked) {
+        // hide-5-6-columns도 함께 off로 설정
+        hideColumnsToggleSwitch.checked = false;
+      }
+      renderHistory();
+    });
+  }
+  
+  // hide-5-6-columns 토글 스위치 이벤트 리스너
+  if (hideColumnsToggleSwitch) {
+    hideColumnsToggleSwitch.addEventListener('change', (e) => {
+      // deduplicate가 off이고 hide-5-6-columns를 on하려고 할 때
+      if (!dedupToggleSwitch.checked && e.target.checked) {
+        // deduplicate도 함께 on으로 설정
+        dedupToggleSwitch.checked = true;
+      }
+      renderHistory();
+    });
+  }
+}
+
+// 히스토리 b-5. 선택된 항목들 중 중복 논문이 있는지 체크
+function checkForDuplicatesInSelection() {
+  const isDedupOff = !document.getElementById('deduplicate')?.checked;
+  
+  // deduplicate가 on이면 중복 체크 안 함
+  if (!isDedupOff) return false;
+  
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  if (selectedIds.length <= 1) return false;
+  
+  // 선택된 항목들 가져오기
+  return new Promise(resolve => {
+    chrome.storage.local.get({ history: [] }, items => {
+      const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
+      
+      // 중복 검사
+      for (let i = 0; i < selectedItems.length; i++) {
+        for (let j = i + 1; j < selectedItems.length; j++) {
+          if (isSameArticleBase(selectedItems[i], selectedItems[j])) {
+            resolve(true); // 중복 발견
+            return;
+          }
+        }
+      }
+      resolve(false); // 중복 없음
+    });
+  });
+}
+
+// 히스토리 c. 선택된 항목들의 인용 표기 복사
+function copySelectedCitations() {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  chrome.storage.local.get({ history: [] }, items => {
+    const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
+    const styleSettings = getStyleSettings();
+    
+    // 첫 번째 저자를 기준으로 정렬, 같으면 연도 오름차순
+    selectedItems.sort((a, b) => {
+      const authorA = Array.isArray(a.metadata.authors) && a.metadata.authors.length > 0 
+        ? a.metadata.authors[0] : (a.metadata.authors || '');
+      const authorB = Array.isArray(b.metadata.authors) && b.metadata.authors.length > 0 
+        ? b.metadata.authors[0] : (b.metadata.authors || '');
+      
+      const authorCompare = authorA.localeCompare(authorB);
+      if (authorCompare !== 0) return authorCompare;
+      
+      // 저자가 같으면 연도로 정렬
+      const yearA = parseInt(a.metadata.year) || 0;
+      const yearB = parseInt(b.metadata.year) || 0;
+      return yearA - yearB;
+    });
+    
+    // 인용 표기들을 생성
+    const citations = selectedItems.map(item => getCombinedCitation(item.metadata, styleSettings));
+    
+    // 모달에 예시 표시 - 실제 선택된 첫 번째 항목 대신 고정된 예시 사용
+    const exampleDiv = document.getElementById('citation-example');
+    if (exampleDiv) {
+      const exampleMetadata = {
+        authors: ['저자'],
+        title_main: '본제목',
+        title_sub: '부제목',
+        journal_name: '학술지명',
+        volume: '50',
+        issue: '3',
+        publisher: '발간기관',
+        year: '2002',
+        page_first: '68',
+        page_last: '89'
+      };
+      const exampleCitation = getCombinedCitation(exampleMetadata, styleSettings);
+      exampleDiv.textContent = exampleCitation;
+    }
+    
+    // 모달 표시
+    document.getElementById('copy-citations-modal').classList.remove('hidden');
+    
+    // 클립보드 복사 실행 함수
+    window.copyCitationsToClipboard = () => {
+      const citationText = citations.join('\n');
+      navigator.clipboard.writeText(citationText)
+        .then(() => {
+          showToast('선택된 논문들의 인용 표기 전체가 클립보드에 복사되었습니다');
+          document.getElementById('copy-citations-modal').classList.add('hidden');
+        })
+        .catch(err => {
+          console.error('복사 실패:', err);
+          showToastError('복사에 실패했습니다');
+        });
+    };
+  });
+}
+
+// 히스토리 d-1. 선택된 항목들을 엑셀로 다운로드하는 함수
+function downloadSelectedItemsExcel(selectedIds) {
+  chrome.storage.local.get({ history: [] }, items => {
+    // 선택된 항목들만 필터링
+    const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
+    
+    // 최신 순으로 정렬 (timestampId 내림차순)
+    selectedItems.sort((a, b) => b.timestampId - a.timestampId);
+    
+    const data = selectedItems.map(item => ({
+      '저자': Array.isArray(item.metadata.authors) ? item.metadata.authors.join(', ') : (item.metadata.authors || ''),
+      '본제목': item.metadata.title_main || '',
+      '부제목': item.metadata.title_sub || '',
+      '학술지명': item.metadata.journal_name || '',
+      '권수': item.metadata.volume || '',
+      '호수': item.metadata.issue || '',
+      '발행기관': item.metadata.publisher || '',
+      '연도': item.metadata.year || '',
+      '첫 페이지': item.metadata.page_first || '',
+      '끝 페이지': item.metadata.page_last || '',
+      '키워드': Array.isArray(item.metadata.keywords) ? item.metadata.keywords.join(', ') : (item.metadata.keywords || ''),
+      '프로젝트 태그': Array.isArray(item.projectTags) ? item.projectTags.join(', ') : (item.projectTags || ''),
+      '국문 초록': item.metadata.abstract || '',
+      '조합된 인용 표기': getCombinedCitation(item.metadata, getStyleSettings()),
+      '검색한 학술 DB': item.academicDB,
+      'URL': item.url,
+      '검색(추출) 일시': item.timestamp
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    // 열 너비 설정 (wch: 문자 수 기반 너비)
+    ws['!cols'] = [
+      { wch: 10 }, // 저자
+      { wch: 35 }, // 본제목
+      { wch: 35 }, // 부제목
+      { wch: 15 }, // 학술지명
+      { wch: 5 }, // 권수
+      { wch: 5 }, // 호수
+      { wch: 15 }, // 발행기관
+      { wch: 5 }, // 연도
+      { wch: 7 }, // 첫 페이지
+      { wch: 7 }, // 마지막 페이지
+      { wch: 35 }, // 키워드
+      { wch: 15 }, // 프로젝트 태그
+      { wch: 35 }, // 국문 초록
+      { wch: 100 }, // 조합된 인용 표기
+      { wch: 13 }, // 검색한 학술 DB
+      { wch: 7 }, // URL
+      { wch: 15 }  // 검색(추출) 일시
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Selected Items');
+    
+    // 파일명을 오늘 날짜 기반으로 생성 (YY.MM.DD)
+    const now = new Date();
+    const year2 = String(now.getFullYear()).slice(-2);
+    const month2 = String(now.getMonth() + 1).padStart(2, '0');
+    const day2 = String(now.getDate()).padStart(2, '0');
+    const filename = `Sickle-Cite 서지정보(${year2}.${month2}.${day2}).xlsx`;
+    
+    XLSX.writeFile(wb, filename);
+    
+    // 모달 닫고 토스트 메시지 표시
+    document.getElementById('export-bibliography-modal').classList.add('hidden');
+    showToast('선택한 항목에 대한 정보를 엑셀 파일로 저장했습니다');
+  });
+}
+
+// 히스토리 d-2. 선택된 항목들을 RIS 파일로 다운로드하는 함수
+function downloadSelectedItemsRis(selectedIds) {
+  chrome.storage.local.get({ history: [] }, items => {
+    // 선택된 항목들만 필터링
+    const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
+    
+    // 최신 순으로 정렬 (timestampId 내림차순)
+    selectedItems.sort((a, b) => b.timestampId - a.timestampId);
+    
+    // RIS 형식으로 변환
+    let risContent = '';
+    
+    selectedItems.forEach(item => {
+      const meta = item.metadata;
+      
+      // 각 레코드 시작 - 학위논문 여부에 따라 타입 결정
+      const isThesis = meta.publisher && meta.publisher.includes('학위논문');
+      risContent += isThesis ? 'TY  - THES\n' : 'TY  - JOUR\n';
+      
+      // 저자들 추가
+      if (Array.isArray(meta.authors)) {
+        meta.authors.forEach(author => {
+          if (author.trim()) {
+            risContent += `AU  - ${author.trim()}\n`;
+          }
+        });
+      } else if (meta.authors && meta.authors.trim()) {
+        risContent += `AU  - ${meta.authors.trim()}\n`;
+      }
+      
+      // 제목 (본제목 + 부제목)
+      let fullTitle = meta.title_main || '';
+      if (meta.title_sub) {
+        const styleSettings = getStyleSettings();
+        const separator = meta.title_sub ? styleSettings.titleSeparator : '';
+        fullTitle += separator + meta.title_sub;
+      }
+      if (fullTitle) {
+        risContent += `TI  - ${fullTitle}\n`;
+      }
+      
+      // 학술지명
+      if (meta.journal_name) {
+        risContent += `JO  - ${meta.journal_name}\n`;
+      }
+      
+      // 권수
+      if (meta.volume) {
+        risContent += `VL  - ${meta.volume}\n`;
+      }
+      
+      // 호수
+      if (meta.issue) {
+        risContent += `IS  - ${meta.issue}\n`;
+      }
+
+      // 발행기관
+      if (meta.publisher) {
+        risContent += `PB  - ${meta.publisher}\n`;
+      }
+
+      // 발행연도
+      if (meta.year) {
+        risContent += `PY  - ${meta.year}\n`;
+      }
+      
+      // 시작 페이지
+      if (meta.page_first) {
+        risContent += `SP  - ${meta.page_first}\n`;
+      }
+      
+      // 끝 페이지
+      if (meta.page_last) {
+        risContent += `EP  - ${meta.page_last}\n`;
+      }
+
+      // 키워드들 추가
+      if (Array.isArray(meta.keywords)) {
+        meta.keywords.forEach(keyword => {
+          if (keyword.trim()) {
+            risContent += `KW  - ${keyword.trim()}\n`;
+          }
+        });
+      } else if (meta.keywords && meta.keywords.trim()) {
+        // 콤마로 분리된 키워드들 처리
+        const keywords = meta.keywords.split(',').map(kw => kw.trim()).filter(kw => kw);
+        keywords.forEach(keyword => {
+          risContent += `KW  - ${keyword}\n`;
+        });
+      }
+
+      // 초록
+      if (meta.abstract) {
+        risContent += `AB  - ${meta.abstract}\n`;
+      }
+      
+      // 데이터베이스 정보
+      if (item.academicDB) {
+        risContent += `DB  - ${item.academicDB}\n`;
+      }
+      
+      // URL
+      if (item.url) {
+        risContent += `UR  - ${item.url}\n`;
+      }
+      
+      // 레코드 끝
+      risContent += 'ER  - \n\n';
+    });
+    
+    // Blob 생성 및 다운로드
+    const blob = new Blob([risContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    // 임시 다운로드 링크 생성
+    const a = document.createElement('a');
+    a.href = url;
+    
+    // 파일명을 오늘 날짜 기반으로 생성 (YY.MM.DD)
+    const now = new Date();
+    const year2 = String(now.getFullYear()).slice(-2);
+    const month2 = String(now.getMonth() + 1).padStart(2, '0');
+    const day2 = String(now.getDate()).padStart(2, '0');
+    a.download = `Sickle-Cite 서지정보(${year2}.${month2}.${day2}).ris`;
+    
+    // 다운로드 실행
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // 모달 닫고 토스트 메시지 표시
+    document.getElementById('export-bibliography-modal').classList.add('hidden');
+    showToast('선택한 항목의 서지정보를 .ris 파일로 저장했습니다');
+  });
+}
+
+// 탭 2 이벤트 리스너 -----------------------
+
+// "삭제" 버튼
+
+// 삭제 버튼 클릭 → 모달 띄우기
+document.getElementById('delete-history-selected').addEventListener('click', () => {
+  document.getElementById('delete-selected-confirm').classList.remove('hidden');
+});
+
+// 예: 선택된 항목 삭제 & 모달 닫기
+document.getElementById('confirm-selected-yes').addEventListener('click', () => {
+  deleteSelectedHistoryItems();
+  document.getElementById('delete-selected-confirm').classList.add('hidden');
+});
+
+// 아니요: 모달만 닫기
+document.getElementById('confirm-selected-no').addEventListener('click', () => {
+  document.getElementById('delete-selected-confirm').classList.add('hidden');
+});
+
+// "인용 표기 복사" 버튼
+
+// 인용 표기 복사 버튼 클릭 → 모달 띄우기
+document.getElementById('copy-citations-selected').addEventListener('click', () => {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  if (selectedIds.length === 0) {
+    showToastError('복사할 항목을 선택해주세요');
+    return;
+  }
+  
+  // deduplicate가 on이면 중복 검사 생략
+  const isDedupOn = document.getElementById('deduplicate')?.checked;
+  if (isDedupOn) {
+    copySelectedCitations();
+    return;
+  }
+  
+  // deduplicate가 off일 때만 중복 논문 체크
+  checkForDuplicatesInSelection().then(hasDuplicates => {
+    if (hasDuplicates) {
+      showToastError('선택된 항목들 가운데 중복된 논문이 있습니다');
+      return;
+    }
+    
+    // 중복이 없으면 기존 로직 수행
+    copySelectedCitations();
+  });
+});
+
+// 인용 표기 복사 확인 버튼
+document.getElementById('copy-citations-confirm').addEventListener('click', () => {
+  if (window.copyCitationsToClipboard) {
+    window.copyCitationsToClipboard();
+  }
+});
+
+// 인용 표기 복사 취소 버튼
+document.getElementById('copy-citations-cancel').addEventListener('click', () => {
+  document.getElementById('copy-citations-modal').classList.add('hidden');
+});
+
+// "서지사항 내보내기" 버튼
+
+// 서지사항 내보내기 버튼 클릭 → 모달 띄우기
+document.getElementById('export-bibliography-selected').addEventListener('click', () => {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  if (selectedIds.length === 0) {
+    showToastError('내보낼 항목을 선택해주세요');
+    return;
+  }
+  
+  // deduplicate가 on이면 중복 검사 생략
+  const isDedupOn = document.getElementById('deduplicate')?.checked;
+  if (isDedupOn) {
+    document.getElementById('export-bibliography-modal').classList.remove('hidden');
+    return;
+  }
+  
+  // deduplicate가 off일 때만 중복 논문 체크
+  checkForDuplicatesInSelection().then(hasDuplicates => {
+    if (hasDuplicates) {
+      showToastError('선택된 항목들 가운데 중복된 논문이 있습니다');
+      return;
+    }
+    
+    // 중복이 없으면 모달 표시
+    document.getElementById('export-bibliography-modal').classList.remove('hidden');
+  });
+});
+
+// 엑셀 파일로 다운로드 버튼
+document.getElementById('export-excel').addEventListener('click', () => {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  if (selectedIds.length === 0) {
+    showToastError('다운로드할 항목을 선택해주세요');
+    return;
+  }
+  
+  downloadSelectedItemsExcel(selectedIds);
+});
+
+// RIS 파일로 다운로드 버튼
+document.getElementById('export-ris').addEventListener('click', () => {
+  const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
+  const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
+  
+  if (selectedIds.length === 0) {
+    showToastError('다운로드할 항목을 선택해주세요');
+    return;
+  }
+  
+  downloadSelectedItemsRis(selectedIds);
+});
+
+// 서지사항 내보내기 취소 버튼
+document.getElementById('export-cancel').addEventListener('click', () => {
+  document.getElementById('export-bibliography-modal').classList.add('hidden');
+});
+
+// 히스토리 3. 검색창에 입력 감지될 때마다 히스토리 다시 렌더
+function reRenderHistorySearch() {
+  const searchInput = document.getElementById('search-history');
+  const clearButton = document.getElementById('clear-search');
+  
+  if (searchInput) {
+    // 입력값 변경 시 삭제 버튼 표시/숨김 처리
+    searchInput.addEventListener('input', () => {
+      clearButton.style.display = searchInput.value ? 'flex' : 'none';
+      renderHistory();
+    });
+    
+    // 삭제 버튼 클릭 시 입력값 초기화
+    clearButton.addEventListener('click', () => {
+      searchInput.value = '';
+      clearButton.style.display = 'none';
+      renderHistory();
+      searchInput.focus();
+    });
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+// 설정 처리 -----------------------
+
 // 설정 1: 탭3의 설정값을 객체로 반환
 function getStyleSettings() {
   // 제목·부제목 구분 기호
@@ -1004,497 +1938,13 @@ function restoreStyleSettings() {
   });
 }
 
-// 인용 1: 메타데이터와 인용 양식 설정값을 조합해 최종적인 인용(citation)을 도출
-function getCombinedCitation(meta, style) {
-  // 서브타이틀이 없으면 구분 기호 제거
-  const checkedSeparator = meta.title_sub ? style.titleSeparator : '';
-  const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join('·') : meta.authors;
-  const hasVol = meta.volume !== '';
-  const hasIss = meta.issue !== '';
-  let pageRangePart = '';
-  if (style.pageRangeInclude) {
-    pageRangePart = `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
-  }
-  let combinedCitation = '';
-  // 권수와 호수 둘 다 있을 경우
-  if (hasVol && hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-  // 권수와 호수 둘 중 하나만 있을 경우
-  } else if (hasVol || hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-  } else {
-    // 학술지명 값이 비어 있을 경우(학위논문일 경우 등) 학술지명 부분 전체를 제거 ("『』, "이 나타나지 않도록)
-    if (!meta.journal_name) {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-    } else {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-    }
-  }
-  return combinedCitation;
-}
+//////////////////////////////////////////////////////////////////////////////
 
-// 인용 2: 탭1 우측 textarea에 조합된 citation을 삽입 -> 이벤트 리스너가 있는 다른 함수에서 호출
-function fillCitation(meta) {
-  const textarea = document.querySelector('.citation-input');
-  if (
-    !meta ||
-    Object.values(meta).every(
-      v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
-    )
-  ) {
-    if (textarea) textarea.value = '';
-    return;
-  }
-  const style = getStyleSettings();
-  const combinedCitation = getCombinedCitation(meta, style);
-  if (textarea) textarea.value = combinedCitation;
-}
-
-// 히스토리 1: 히스토리에 pageInfo 추가(저장)
-function savePageInfoToHistory(pageInfo) {
-  chrome.storage.local.get({ history: [] }, items => {
-    const merged = items.history.concat(pageInfo);
-    // 같은 논문인지 판별하는 함수
-    function isSameArticle(a, b) {
-      const aKeys = Object.keys(a);
-      const bKeys = Object.keys(b);
-      if (aKeys.length !== bKeys.length) return false;
-      return aKeys.every(key => {
-        const valA = a[key];
-        const valB = b[key];
-        if (Array.isArray(valA) && Array.isArray(valB)) {
-          return valA.length === valB.length && valA.every((v, i) => v === valB[i]);
-        }
-        return valA === valB;
-      });
-    }
-    // 중복 제거
-    const uniqueHistory = [];
-    merged.forEach(item => {
-      const exists = uniqueHistory.some(u =>
-        u.academicDB === item.academicDB &&
-        u.url === item.url &&
-        u.timestamp === item.timestamp &&
-        isSameArticle(u.metadata, item.metadata)
-      );
-      if (!exists) uniqueHistory.push(item);
-    });
-    // 저장
-    chrome.storage.local.set({ history: uniqueHistory }, () => {
-      console.log('히스토리 저장 및 중복 제거 완료:', uniqueHistory);
-      // 저장 후 UI 갱신
-      renderHistory();
-    });
-  });
-}
-
-// 히스토리 a. 히스토리 항목 삭제
-function deleteHistoryItem(targetItem) {
-  const isDedup = document.getElementById('deduplicate')?.checked;
-  chrome.storage.local.get({ history: [] }, items => {
-    let filtered;
-    if (isDedup) {
-      // 중복 기준(metadata, academicDB, url)으로 일치하는 모든 항목 제거
-      const targetKey = JSON.stringify({
-        metadata: targetItem.metadata,
-        academicDB: targetItem.academicDB,
-        url: targetItem.url
-      });
-      filtered = items.history.filter(item => {
-        const itemKey = JSON.stringify({
-          metadata: item.metadata,
-          academicDB: item.academicDB,
-          url: item.url
-        });
-        return itemKey !== targetKey;
-      });
-    } else {
-      // 정확히 일치하는 단일 항목만 제거 (timestamp 포함)
-      filtered = items.history.filter(item =>
-        !(
-          item.academicDB === targetItem.academicDB &&
-          item.url === targetItem.url &&
-          item.timestamp === targetItem.timestamp &&
-          JSON.stringify(item.metadata) === JSON.stringify(targetItem.metadata)
-        )
-      );
-    }
-    chrome.storage.local.set({ history: filtered }, () => {
-      console.log('히스토리 항목 삭제됨:', targetItem);
-      renderHistory();
-    });
-  });
-}
-
-// 히스토리 b-1. metadata 기준 중복 제거 (가장 이른 timestamp만 남김)
-function deduplicateHistory(historyArray) {
-  const groups = {};
-  historyArray.forEach(item => {
-    const key = JSON.stringify({
-      authors: item.metadata.authors,
-      title_main: item.metadata.title_main,
-      title_sub: item.metadata.title_sub,
-      journal_name: item.metadata.journal_name,
-      publisher: item.metadata.publisher,
-      year: item.metadata.year
-    });
-    if (!groups[key] || item.timestamp.localeCompare(groups[key].timestamp) < 0) {
-      groups[key] = item;
-    }
-  });
-  return Object.values(groups);
-}
-
-// 히스토리 b-2. metadata, academicDB, url, timestamp 모두 포함하여 완전 동일 항목만 중복 제거 (가장 이른 timestamp 유지)
-function deduplicateFullHistory(historyArray) {
-  const groups = {};
-  historyArray.forEach(item => {
-    const key = JSON.stringify(item);
-    if (!groups[key] || item.timestamp.localeCompare(groups[key].timestamp) < 0) {
-      groups[key] = item;
-    }
-  });
-  return Object.values(groups);
-}
-
-// 히스토리 2: 탭2에 히스토리 표 생성
-function renderHistory() {
-  chrome.storage.local.get({ history: [] }, items => {
-    // 히스토리 데이터 불러오기
-    const rawHistory = items.history.slice();
-    // 검색 필터링 (공백 단위 분할, 모든 키워드 포함 여부)
-    const searchValue = document.getElementById('search-history')?.value.trim().toLowerCase() || '';
-    const terms = searchValue.split(/\s+/).filter(Boolean);
-    const baseHistory = terms.length
-      ? rawHistory.filter(item => {
-          const metaValues = Object.values(item.metadata).flatMap(v => Array.isArray(v) ? v : [v]);
-          const tagValues = Array.isArray(item.projectTags) ? item.projectTags : [];
-          const haystack = [...metaValues, ...tagValues].join(' ');
-          return terms.every(term => Hangul.search(haystack, term) !== -1);
-        })
-      : rawHistory;
-    // 체크박스 상태에 따라 중복 처리 분기
-    const isDedup = document.getElementById('deduplicate')?.checked;
-    const history = isDedup
-      ? deduplicateHistory(baseHistory)        // timestamp 제외 기준 중복 제거
-      : deduplicateFullHistory(baseHistory);   // 전체 필드 기준 중복 제거 (timestamp 포함)
-    // timestampId 기준 내림차순 정렬 (밀리초 단위 정확도)
-    history.sort((a, b) => b.timestampId - a.timestampId);
-    const container = document.getElementById('history-list');
-    if (!container) return;
-    container.innerHTML = '';
-    container.style.position = 'relative';
-    container.style.maxHeight = '500px';   // 최대 높이를 500px로 제한
-    container.style.overflowY  = 'auto';   // 넘칠 때 세로 스크롤 활성화
-    container.style.minHeight = '300px';   // 최소 높이
-    container.style.paddingBottom = '20px';   // 체크박스 뒤로 내용이 스크롤되지 않도록 여유 공간 확보
-    const table = document.createElement('table');
-    table.style.border = 'none';
-    table.style.width = '100%';
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    ['저자','논문 제목','태그','학술 DB','추출 일시'].forEach(text => {
-      const th = document.createElement('th');
-      th.textContent = text;
-      th.style.border = 'none';
-      th.style.textAlign = 'left';
-      th.style.padding = '6px';
-      headerRow.appendChild(th);
-    });
-    // 삭제 컬럼 헤더
-    const thDel = document.createElement('th');
-    thDel.style.border = 'none';
-    thDel.style.padding = '6px';
-    thDel.textContent = ''; // 아이콘용 빈 헤더
-    headerRow.appendChild(thDel);
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    history.forEach(item => {
-      const tr = document.createElement('tr');
-      tr.style.border = 'none';
-      // 저자 표시 규칙 수정: 공저자일 때 처음 1명 + ' 외'
-      const authorsArray = Array.isArray(item.metadata.authors) ? item.metadata.authors : item.metadata.authors ? [item.metadata.authors] : [];
-      let authorText = '';
-      if (authorsArray.length >= 2) {
-        authorText = authorsArray[0] + ' 외';
-      } else {
-        authorText = authorsArray.join(', ');
-      }
-      // 제목 정보 불러오기
-      const titleMain = item.metadata.title_main || ''; // 표에서는 이것만 씀
-      const titleSub = item.metadata.title_sub || '';
-      const styleSettings = getStyleSettings();
-      const checkedSeparator = item.metadata.title_sub ? styleSettings.titleSeparator : '';
-      const fullTitle = `${titleMain}${checkedSeparator}${titleSub}`; // 툴팁용
-      ['author', 'title', 'tag', 'db', 'time'].forEach((_, idx) => {
-        const td = document.createElement('td');
-        td.style.border = 'none';
-        td.style.padding = '6px';
-        // 제1열: 저자
-        if (idx === 0) {
-          td.textContent = authorText;
-          td.title = Array.isArray(item.metadata.authors) //툴팁(기본)
-            ? item.metadata.authors.join(', ')
-            : (item.metadata.authors || '');
-          td.dataset.tooltip = td.title;
-          // 클릭 시 탭1으로 전환 후 데이터 채우기
-          td.style.cursor = 'pointer';
-          td.addEventListener('click', () => {
-            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
-            if (tab1Btn) tab1Btn.click();
-            currentMetadataGlobal = item.metadata;
-            try {
-              fillMetadataField(item.metadata);
-              currentTimestampIdGlobal = item.timestampId;
-              loadProjectTags(); // 태그 로딩 추가
-            } catch (err) {
-              console.error('fillMetadataField error:', err);
-              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
-              return;
-            }
-            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
-            fillCitation(currentMetadataGlobal);
-            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
-            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
-          });
-        // 제2열: 제목
-        } else if (idx === 1) {
-          // 제목 셀: line-clamp 적용을 위한 div 래퍼 생성
-          const titleDiv = document.createElement('div');
-          titleDiv.className = 'clamp-title';
-          titleDiv.textContent = titleMain;
-          td.appendChild(titleDiv);
-          td.title = fullTitle; //툴팁(기본) 툴팁에서는 전체 제목을 보여줌
-          td.dataset.tooltip = titleMain;
-          // 클릭 시 탭1으로 전환 후 데이터 채우기
-          td.style.cursor = 'pointer';
-          td.addEventListener('click', () => {
-            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
-            if (tab1Btn) tab1Btn.click();
-            currentMetadataGlobal = item.metadata;
-            try {
-              fillMetadataField(item.metadata);
-              currentTimestampIdGlobal = item.timestampId;
-              loadProjectTags(); // 태그 로딩 추가
-            } catch (err) {
-              console.error('fillMetadataField error:', err);
-              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
-              return;
-            }
-            updateCurrentMetadata(currentMetadataGlobal); // 사용자가 직접 수정 시 즉각 currentMetadataGlobal에 업데이트됨
-            fillCitation(currentMetadataGlobal);
-            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
-            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
-          });
-        // 제3열: 태그
-        } else if (idx === 2) {
-          const tagsArray = Array.isArray(item.projectTags) ? item.projectTags : [];
-          td.innerHTML = '';
-          if (tagsArray.length > 0) {
-            // 첫 번째 태그만 표시 (최대 8자 + …)
-            const firstTag = document.createElement('span');
-            firstTag.className = 'history-tag-chip';
-            const raw = tagsArray[0];
-            const truncated = raw.length > 8 ? raw.slice(0, 8) + '…' : raw;
-            firstTag.textContent = truncated;
-
-            // 태그 배지용 wrapper div 추가
-            const tagWrapper = document.createElement('div');
-            tagWrapper.style.position = 'relative';
-            tagWrapper.style.display = 'inline-block';
-            tagWrapper.appendChild(firstTag);
-
-            if (tagsArray.length > 1) {
-              const badge = document.createElement('span');
-              badge.className = 'tag-badge';
-              badge.textContent = `+${tagsArray.length - 1}`;
-              tagWrapper.appendChild(badge);
-            }
-
-            td.appendChild(tagWrapper);
-            td.title = tagsArray.join(', ');
-          } else {
-            td.textContent = '';
-            td.title = '태그 없음';
-          }
-          td.style.color = tagsArray.length > 0 ? 'var(--accent)' : 'var(--text-secondary)';
-          td.style.fontSize = '12px';
-          td.style.cursor = 'pointer';
-          // 클릭 시 탭1으로 전환 후 데이터 채우기 (다른 열과 동일한 동작)
-          td.addEventListener('click', () => {
-            const tab1Btn = document.querySelector('.tab-btn[data-tab="tab1"]');
-            if (tab1Btn) tab1Btn.click();
-            currentMetadataGlobal = item.metadata;
-            try {
-              fillMetadataField(item.metadata);
-              currentTimestampIdGlobal = item.timestampId;
-              loadProjectTags(); // 태그 로딩 추가
-            } catch (err) {
-              console.error('fillMetadataField error:', err);
-              showToastError('서지정보 내역에서 해당 논문의 서지정보를 불러오지 못했습니다');
-              return;
-            }
-            updateCurrentMetadata(currentMetadataGlobal);
-            fillCitation(currentMetadataGlobal);
-            const shortTimestamp = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
-            showToast(`${shortTimestamp}에 추출된 서지정보를 불러왔습니다`);
-          });
-        // 제4열: 학술 DB
-        } else if (idx === 3) {
-          const a = document.createElement('a');
-          a.href = item.url;
-          a.textContent = item.academicDB;
-          a.target = '_blank';
-          a.title = '검색 결과 페이지 바로가기'; //툴팁(기본)
-          td.appendChild(a);
-        //제5열: 추출 일시
-        } else if (idx === 4) {
-          // 분 단위까지만 표시 (초 단위 제거)
-          td.textContent = item.timestamp.slice(0, item.timestamp.lastIndexOf(':'));
-        }
-        tr.appendChild(td);
-      });
-      // 삭제 버튼 셀
-      const tdDel = document.createElement('td');
-      tdDel.style.border = 'none';
-      tdDel.style.padding = '6px';
-      const btn = document.createElement('button');
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" alt="삭제" width="14" height="14" style="color: var(--text-secondary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
-      btn.style.border = 'none';
-      btn.style.background = 'none';
-      btn.style.cursor = 'pointer';
-      btn.title = '삭제'; //툴팁(기본)
-      btn.addEventListener('click', () => deleteHistoryItem(item));
-      tdDel.appendChild(btn);
-      tr.appendChild(tdDel);
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    container.appendChild(table);
-  });
-}
-// 히스토리 3. 체크박스 클릭 시 히스토리 다시 렌더
-function reRenderHistoryCheck() {
-  const dedupToggleSwitch = document.getElementById('deduplicate');
-  if (dedupToggleSwitch) {
-    dedupToggleSwitch.addEventListener('change', renderHistory);
-  }
-}
-// 히스토리 4. 검색창에 입력 감지될 때마다 히스토리 다시 렌더
-function reRenderHistorySearch() {
-  const searchInput = document.getElementById('search-history');
-  const clearButton = document.getElementById('clear-search');
-  
-  if (searchInput) {
-    // 입력값 변경 시 삭제 버튼 표시/숨김 처리
-    searchInput.addEventListener('input', () => {
-      clearButton.style.display = searchInput.value ? 'flex' : 'none';
-      renderHistory();
-    });
-    
-    // 삭제 버튼 클릭 시 입력값 초기화
-    clearButton.addEventListener('click', () => {
-      searchInput.value = '';
-      clearButton.style.display = 'none';
-      renderHistory();
-      searchInput.focus();
-    });
-  }
-}
-// 히스토리 5. 다운로드 버튼을 누르면 히스토리를 엑셀로 다운로드
-function downloadHistory() {
-  const downloadBtn = document.getElementById('download-history');
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', () => {
-      // 저장된 히스토리 불러오기
-      chrome.storage.local.get({ history: [] }, items => {
-        // 중복 처리: 체크박스 상태에 따라 전체 필드 기준 또는 timestamp 제외 기준 중복 제거
-        const rawHistory = items.history.slice();
-        const isDedup = document.getElementById('deduplicate')?.checked;
-        const historyForExport = isDedup
-          ? deduplicateHistory(rawHistory)
-          : deduplicateFullHistory(rawHistory);
-        const data = historyForExport.map(item => ({
-          '저자': Array.isArray(item.metadata.authors) ? item.metadata.authors.join(', ') : (item.metadata.authors || ''),
-          '본제목': item.metadata.title_main || '',
-          '부제목': item.metadata.title_sub || '',
-          '학술지명': item.metadata.journal_name || '',
-          '권수': item.metadata.volume || '',
-          '호수': item.metadata.issue || '',
-          '발행기관': item.metadata.publisher || '',
-          '연도': item.metadata.year || '',
-          '첫 페이지': item.metadata.page_first || '',
-          '끝 페이지': item.metadata.page_last || '',
-          '키워드': Array.isArray(item.metadata.keywords) ? item.metadata.keywords.join(', ') : (item.metadata.keywords || ''),
-          '프로젝트 태그': Array.isArray(item.projectTags) ? item.projectTags.join(', ') : (item.projectTags || ''),
-          '국문 초록': item.metadata.abstract || '',
-          '조합된 인용 표기': getCombinedCitation(item.metadata, getStyleSettings()),
-          '검색한 학술 DB': item.academicDB,
-          'URL': item.url,
-          '검색(추출) 일시': item.timestamp
-        }));
-        const ws = XLSX.utils.json_to_sheet(data);
-        // 열 너비 설정 (wch: 문자 수 기반 너비)
-        ws['!cols'] = [
-          { wch: 10 }, // 저자
-          { wch: 35 }, // 본제목
-          { wch: 35 }, // 부제목
-          { wch: 15 }, // 학술지명
-          { wch: 5 }, // 권수
-          { wch: 5 }, // 호수
-          { wch: 15 }, // 발행기관
-          { wch: 5 }, // 연도
-          { wch: 7 }, // 첫 페이지
-          { wch: 7 }, // 마지막 페이지
-          { wch: 35 }, // 키워드
-          { wch: 15 }, // 프로젝트 태그
-          { wch: 35 }, // 국문 초록
-          { wch: 100 }, // 조합된 인용 표기
-          { wch: 13 }, // 검색한 학술 DB
-          { wch: 7 }, // URL
-          { wch: 15 }  // 검색(추출) 일시
-        ];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'History');
-        // 파일명을 오늘 날짜 기반으로 생성 (YY.MM.DD)
-        const now = new Date();
-        const year2 = String(now.getFullYear()).slice(-2);
-        const month2 = String(now.getMonth() + 1).padStart(2, '0');
-        const day2 = String(now.getDate()).padStart(2, '0');
-        const filename = `Sickle-Cite 학술지논문 서지정보 내역(${year2}.${month2}.${day2}).xlsx`;
-        XLSX.writeFile(wb, filename);
-      });
-    });
-  }
-}
-
-// 이벤트 리스너
-
-// 삭제 버튼 클릭 → 모달 띄우기
-document.getElementById('delete-history-all').addEventListener('click', () => {
-  document.getElementById('delete-confirm').classList.remove('hidden');
-});
-// 예: 히스토리 삭제 & 모달 닫기
-document.getElementById('confirm-yes').addEventListener('click', () => {
-  chrome.storage.local.set({ history: [] }, () => {
-    showToast('저장된 내역이 모두 삭제되었습니다');
-    renderHistory();
-  });
-  document.getElementById('delete-confirm').classList.add('hidden');
-});
-// 아니요: 모달만 닫기
-document.getElementById('confirm-no').addEventListener('click', () => {
-  document.getElementById('delete-confirm').classList.add('hidden');
-});
-
-// ----------------------------------------------------------------
-
-// ** 실행 **
+// ********* 실행 *********
 
 // DOM이 로드되는 것을 리슨하여,
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. 저장된 인용 양식 설정값을 불러와 탭3 재구성하기.
+  // 1. 저장된 인용 양식 설정값을 불러와 탭3 재구성하기
   restoreStyleSettings();
   // 2. 실행 시마다 pageInfo를 history에 저장
   requestPageInfo()
@@ -1515,18 +1965,17 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log(err);
       showToastError('논문 서지정보가 존재하지 않거나,\n아직 지원하지 않는 페이지입니다');
     });
-  // 4. 탭3의 설정 변경 시 이를 재저장하기.
+  // 4. 탭3의 설정 변경 시 이를 재저장하기
   resaveChangedStyleSettings();
   // 5. 히스토리 탭 렌더링, 이벤트 리슨하여 리렌더링, 다운로드
   renderHistory();
   reRenderHistoryCheck();
   reRenderHistorySearch();
-  downloadHistory();
   // 6. 태그 UI 초기화 함수 호출
   setupTagInputUI();
   // Windows인 경우에만 스크롤바 설정을 적용
   setScrollbarWin();
-  // 팝업 실행 직후 태그 입력창에 포커스
+  // + 팝업 실행 직후 태그 입력창에 포커스
   const tagsInput = document.getElementById('tags-input');
   if (tagsInput) {
     tagsInput.focus();

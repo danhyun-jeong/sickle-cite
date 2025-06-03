@@ -8,7 +8,7 @@
     --border: #cfd1d6;
     --radius: 6px;
     --spacing: 12px;
-    --font: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font: font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 body {
     margin: 0;
@@ -221,7 +221,7 @@ table {
 table th,
 table td {
     text-align: left;
-    padding: 8px;
+    padding: 6px;
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     color: var(--text);
@@ -230,7 +230,7 @@ table td {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-right: 18px;
+    padding-right: 10px;
 }
 
 .search-input-wrapper {
@@ -238,6 +238,8 @@ table td {
     width: 100%;
     display: flex;
     align-items: center;
+    padding-left: 6px;
+    max-height: 45px;
 }
 
 .search-input-wrapper input {
@@ -398,37 +400,52 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     width: 100%;          /* 전체 너비를 차지 */
 }
 #tab2 th:nth-child(1),
-#tab2 td:nth-child(1) { width: 9%; }   /* 첫 번째 열(저자) 너비 */
+#tab2 td:nth-child(1) { width: 14px !important; } /* 체크박스 열 너비 */
 #tab2 th:nth-child(2),
-#tab2 td:nth-child(2) { width: 45%; }   /* 두 번째 열(논문 제목) 너비 */
+#tab2 td:nth-child(2) { width: 50px !important; }   /* 저자 열 너비 */
 #tab2 th:nth-child(3),
-#tab2 td:nth-child(3) { width: 14%; }   /* 세 번째 열(태그) 너비 */
+#tab2 td:nth-child(3) { width: 45%; }   /* 논문 제목 열 너비 */
 #tab2 th:nth-child(4),
-#tab2 td:nth-child(4) { width: 8%; }   /* 네 번째 열(학술 DB) 너비 */
+#tab2 td:nth-child(4) { width: 14%; }   /* 태그 열 너비 */
 #tab2 th:nth-child(5),
-#tab2 td:nth-child(5) { width: 11%; }   /* 다섯 번째 열(시간) 너비 */
+#tab2 td:nth-child(5) { width: 8%; }   /* 학술 DB 열 너비 */
 #tab2 th:nth-child(6),
-#tab2 td:nth-child(6) { width: 2.3%; }    /* 여섯 번째 열(삭제) 너비 */
+#tab2 td:nth-child(6) { width: 11%; }   /* 시간 열 너비 */
 
-#tab2 td:nth-child(3) div {
+/* hide-5-6-columns가 활성화되었을 때의 열 너비 재조정 */
+#tab2.hide-columns th:nth-child(3),
+#tab2.hide-columns td:nth-child(3) { width: 75%; }   /* 논문 제목 열 너비 확장 */
+
+#tab2 th:nth-child(1) {
+    padding-top: 10px !important;
+}
+
+#tab2 td:nth-child(1) { 
+    text-align: center;
+    vertical-align: middle;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 6px 5px 6px !important;
+}
+
+#tab2 td:nth-child(4) div {
     right: 4px;
 }
 
-#tab2 td:nth-child(4) a {
+#tab2 td:nth-child(5) a {
     color: var(--accent);
     font-size: 12px;
 }
-#tab2 td:nth-child(5) {
+
+#tab2 td:nth-child(6) {
     font-size: 9px;
     color: var(--text-secondary);
 }
 
-#tab2 td:nth-child(6) button[title="삭제"] {
-    padding: 0;
-}
-
 #tab2 table th {
-    padding-bottom: 10px !important;
+    padding-bottom: 7px !important;
 }
 
 #tab2 .toggle-switch-area {
@@ -437,6 +454,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     justify-content: space-between;
     align-items: center;
     color: var(--text-secondary);
+    position: relative;
 }
 
 #tab2 .toggle-switch-area .checkbox-label {
@@ -458,6 +476,15 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     border-radius: var(--radius);
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+}
+#tab2 .toggle-switch-area button svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
 }
 #tab2 .toggle-switch-area button:hover {
     background: var(--accent);
@@ -470,13 +497,19 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     display: flex; align-items: center; justify-content: center;
     z-index: 2000;
 }
-.modal.hidden { display: none; }
+.modal.hidden { 
+    display: none;
+}
+
 .modal-content {
-background: #fff; padding: 15px; border-radius: 8px;
+background: #fff;
+padding: 20px 30px;
+border-radius: 8px;
 text-align: center;
+border: 1px solid var(--border);
 }
 .modal-content p {
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 .modal-content button {
     justify-content: flex-start;
@@ -488,10 +521,18 @@ text-align: center;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
     margin: 0 8px;
+    padding: 4px 10px;
 }
 .modal-content button:hover {
     background: var(--accent);
     color: var(--bg);
+}
+
+.modal-content h3 {
+    margin: 7px 0 17px 0;
+    font-size: 16px;
+    color: var(--text);
+    text-align: center;
 }
 
 /* 탭2 히스토리 테이블 헤더 고정 */
@@ -582,6 +623,25 @@ input:focus + .slider {
 
 input:checked + .slider:before {
     transform: translateX(14px);
+}
+
+/* 탭2 전용 작은 토글 스위치 스타일 */
+#tab2 .toggle-switch {
+    width: 26px;
+    height: 14px;
+}
+
+#tab2 .slider {
+    border-radius: 14px;
+}
+
+#tab2 .slider:before {
+    height: 10px;
+    width: 10px;
+}
+
+#tab2 input:checked + .slider:before {
+    transform: translateX(12px);
 }
 
 #tab3 .toggle-text {
@@ -889,4 +949,212 @@ input[type="radio"]:checked::before {
 .autocomplete-list li:hover,
 .autocomplete-list li.active {
   background-color: #e9eff8;
+}
+
+/* 체크박스 공통 스타일 */
+#history-list input[type="checkbox"],
+#select-all {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--bg);
+  position: relative;
+}
+
+#history-list input[type="checkbox"]:checked,
+#select-all:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+#history-list input[type="checkbox"]:checked::before,
+#select-all:checked::before {
+  content: "✓";
+  position: absolute;
+  color: var(--bg);
+  font-size: 10px;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* indeterminate 상태 (일부만 선택된 상태) */
+#history-list input[type="checkbox"]:indeterminate,
+#select-all:indeterminate {
+  background-color: rgba(81, 116, 165, 0.6); /* --accent의 60% 투명도 */
+  border-color: rgba(81, 116, 165, 0.6);
+}
+
+#history-list input[type="checkbox"]:indeterminate::before,
+#select-all:indeterminate::before {
+  content: "－";
+  position: absolute;
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: bold;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 개별 체크박스만의 스타일 (필요시) */
+#history-list input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* 삭제 버튼 스타일 */
+#delete-history-selected,
+#copy-citations-selected,
+#export-bibliography-selected {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: absolute;
+  left: 0;
+}
+
+#delete-history-selected:hover,
+#copy-citations-selected:hover,
+#export-bibliography-selected:hover {
+  background: var(--accent-hover);
+}
+
+#delete-history-selected svg,
+#copy-citations-selected svg,
+#export-bibliography-selected svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+/* 버튼들 간격 조정 */
+#copy-citations-selected {
+  left: 70px;
+}
+
+#export-bibliography-selected {
+  left: 190px;
+}
+
+/* 모달 스타일 */
+#delete-selected-confirm {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#delete-selected-confirm.hidden {
+  display: none;
+}
+
+#delete-selected-confirm p {
+  margin: 10px 0 20px 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+#delete-selected-confirm .button-group {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#delete-selected-confirm button:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+#delete-selected-confirm .button-group {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#confirm-selected-yes:hover {
+  background: var(--accent-hover);
+}
+
+#confirm-selected-no:hover {
+  background: var(--bg-tertiary);
+}
+
+.toggle-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+.citation-example {
+    padding: 10px 15px;
+    background-color: #ededed;
+    border-radius: var(--radius);
+    margin: 15px 0;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.citation-instructions {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 5px 0 15px 0;
+    text-align: center;
+}
+
+.export-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    margin: 25px 0 5px 0;
+}
+
+.export-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.export-option-button {
+    font-size: 14px !important;
+    padding: 7px 15px !important;
+    margin-bottom: 15px !important;
+    max-width: 150px !important;
+}
+
+.export-option-button:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+.export-description {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0;
+    max-width: 347px;
 }
