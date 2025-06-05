@@ -288,14 +288,6 @@ table td {
 #tab1 .left-pane .metadata-container {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: calc(var(--spacing) * 3.5);
-}
-#tab1 .left-pane .actions {
-    position: absolute;
-    bottom: var(--spacing);
-    left: var(--spacing);
-    right: var(--spacing);
-    background: var(--bg);
 }
 #tab1 .left-pane .metadata-container .field:first-child {
     margin-top: 0;
