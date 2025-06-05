@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sickle-Cite BETA",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "icons": {
     "128": "icons/icon128.png"
   },
