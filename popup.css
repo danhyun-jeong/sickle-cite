@@ -5,6 +5,7 @@
     --bg-alt: #f8f9fa;
     --text: #202124;
     --text-secondary: #5f6368;
+    --text-muted: #bdc0c3;
     --border: #cfd1d6;
     --radius: 6px;
     --spacing: 12px;
@@ -239,6 +240,7 @@ table td {
     display: flex;
     align-items: center;
     padding-left: 6px;
+    padding-right: 6px;
     max-height: 45px;
 }
 
@@ -1005,7 +1007,7 @@ input[type="radio"]:checked::before {
 #delete-history-selected,
 #copy-citations-selected,
 #export-bibliography-selected {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
@@ -1020,9 +1022,25 @@ input[type="radio"]:checked::before {
   left: 0;
 }
 
-#delete-history-selected:hover,
-#copy-citations-selected:hover,
-#export-bibliography-selected:hover {
+/* 비활성화된 버튼 스타일 */
+#delete-history-selected:disabled,
+#copy-citations-selected:disabled,
+#export-bibliography-selected:disabled {
+  background: var(--bg-secondary) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--text-muted) !important;
+}
+
+#delete-history-selected:disabled:hover,
+#copy-citations-selected:disabled:hover,
+#export-bibliography-selected:disabled:hover {
+  background: var(--bg-secondary) !important;
+}
+
+/* 활성화된 버튼의 호버 효과 */
+#delete-history-selected:not(:disabled):hover,
+#copy-citations-selected:not(:disabled):hover,
+#export-bibliography-selected:not(:disabled):hover {
   background: var(--accent-hover);
 }
 

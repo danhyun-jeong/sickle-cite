@@ -1251,9 +1251,10 @@ function updateDeleteButtonVisibility() {
   const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]');
   const hasChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
   
-  deleteButton.style.display = hasChecked ? 'flex' : 'none';
-  copyButton.style.display = hasChecked ? 'flex' : 'none';
-  exportButton.style.display = hasChecked ? 'flex' : 'none';
+  // 버튼 활성화/비활성화 상태 설정
+  deleteButton.disabled = !hasChecked;
+  copyButton.disabled = !hasChecked;
+  exportButton.disabled = !hasChecked;
 }
 
 // 히스토리 b-2. 헤더 체크박스 상태 업데이트 함수
