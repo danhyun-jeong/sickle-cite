@@ -147,10 +147,14 @@ function verifyMetadata(raw) {
 
 // ----- RISS 페이지 처리 함수: RISS 사이트의 DOM에서 메타데이터 추출 -----
 function parseRISS() {
-  // 문서의 <title> 태그를 확인
+  // 문서의 <title> 태그를 확인 (2025. 09. 기준 레거시)
   const pageTitle = document.title || '';
-  // "학술지논문"을 포함하고 있을 경우 메타데이터 추출
-  if (pageTitle.includes('학술지논문')) {
+  // "국내학술지" 링크가 있는지 확인
+  const isArticle = document.querySelector('.locationW')?.textContent?.includes('국내학술논문');
+  const isThesis = document.querySelector('.locationW')?.textContent?.includes('학위논문');
+  // title에 "학술지논문"이 포함되어 있거나 국내학술논문 링크가 있는지 판별
+  if (pageTitle.includes('학술지논문') || isArticle) {
+    console.log('학술지논문으로 확인됨');
     // 1. 서지사항 리스트 수집: .infoDetailL ul li 항목
     const items = document.querySelectorAll('#thesisInfoDiv .infoDetailL ul li');
     if (!items.length) return;
@@ -222,8 +226,9 @@ function parseRISS() {
     };
     return verifyMetadata(rawMetadata);
   }
-  // "학위논문"을 포함하고 있을 경우 메타데이터 추출
-  if (pageTitle.includes('학위논문')) {
+  // title에 "학위논문"을 포함하고 있을 경우 또는 학위논문 링크가 있는지 판별
+  if (pageTitle.includes('학위논문') || isThesis) {
+    console.log('학위논문으로 확인됨');
     // 1. 서지사항 리스트 수집: .infoDetailL ul li 항목
     const items = document.querySelectorAll('#thesisInfoDiv .infoDetailL ul li');
     if (!items.length) return;
