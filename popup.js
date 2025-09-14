@@ -847,7 +847,8 @@ function getCombinedCitation(meta, style) {
   const hasVol = meta.volume !== '';
   const hasIss = meta.issue !== '';
   let pageRangePart = '';
-  if (style.pageRangeInclude) {
+  // page_first와 page_last가 둘 다 비어있지 않고, pageRangeInclude가 true일 때만 페이지 범위 포함
+  if (style.pageRangeInclude && meta.page_first !== '' && meta.page_last !== '') {
     pageRangePart = `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
   }
   let combinedCitation = '';
