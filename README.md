@@ -2,6 +2,47 @@
 
 > 국내 인문학계의 (전통적·관습적·독자적) 인용양식이 국제 양식과 달라 기존 프로그램과 호환되지 않았습니다. 이런 까닭으로 여러 연구자들이 인용하고자 하는 논문이 있어도 결국 인용을 일일이 쓰는 사람이 많았습니다(아니, 그런 경우밖에 없었던 것 같습니다). 이에 제가 이런 상황을 안타깝게 여겨 새로 확장 프로그램을 만들었으니, 많은 동료 연구자들이 이를 ‘날로’ 써서 (혹은, 무료니까, ‘날로’ 먹고) 그저 편리하셨으면 할 따름입니다. — 개발자
 
+> [!IMPORTANT]
+> 이 저장소가 원본 저장소가 아니라 포크(fork) 저장소일 경우, 이 포크는 원작자의 공식 배포판이 아닐 수 있습니다.
+> 특히 Safari 대응을 위해 수정된 비공식 포크라면, 원저작자 및 기여자를 반드시 명시하고, 공식판과 혼동되지 않도록 배포/소개해주시기를 권합니다.
+> App Store 배포 여부 및 공식 지원 범위는 원작자 측 안내를 우선적으로 확인해주세요.
+
+# Sickle-Cite Safari WebExtension
+
+이 저장소는 Sickle-Cite를 Safari(macOS)에서 직접 빌드해 쓰기 위한 비공식 WebExtension 포크입니다. 원작의 논문 서지정보 추출·인용 표기 생성 기능을 유지하면서, Safari 호환성과 고고학 연구자가 자주 쓰는 국가유산 관련 PDF 파일명 정리 기능을 보강했습니다.
+
+## 이 포크에서 변경한 내용
+
+### 주요 기능
+
+1. 지원 학술 DB 상세 페이지에서 논문 서지정보를 추출하고, 국내 인문학 관습에 맞춘 조합된 인용 표기를 만듭니다.
+2. 추출 내역을 히스토리에 저장하고, 중복 정리·프로젝트 태그·복수 항목 인용 복사 기능을 제공합니다.
+3. 선택한 서지정보를 Excel 또는 RIS 파일로 내보낼 수 있습니다.
+4. Safari WebExtension 빌드를 고려해 `browser`/`chrome` API 호환성과 정적 콘텐츠 스크립트 구성을 보강했습니다.
+5. 지원 사이트에서 PDF를 받을 때 파일명을 인용 표기 기반으로 바꿉니다.
+	- 논문: 현재 설정으로 만든 `조합된 인용 표기.pdf`
+	- 국가유산 보고서·간행물: `기관명, 연도, 『보고서명』.pdf`
+	- 한 페이지에 PDF가 여러 개 있으면 `본문편`, `도판편`, 또는 순번을 붙여 충돌을 줄입니다.
+
+### PDF 파일명 기능의 작동 범위
+
+PDF 파일명 자동 변경은 팝업의 `PDF 파일명 자동 변경` 토글로 켜고 끌 수 있으며, 기본값은 켜짐입니다. 이 토글은 파일명 기능만 제어하고, 기존 서지 추출·인용 복사·히스토리·RIS/Excel 내보내기 기능은 그대로 작동합니다.
+
+작동 대상은 학술 사이트와 국가유산 관련 사이트로 제한했습니다.
+
+- 학술: RISS, KCI, KISS, DBpia, eArticle, 교보 스콜라, KoreaScience, ScienceON, KRM, dCollection, 서울역사아카이브
+- 국가유산: 국가유산청/국가유산포털, 국가유산 지식이음, 국립문화유산연구원, 국가유산 민원, 관련 `heritage.go.kr`, `cha.go.kr`, `khs.go.kr`, `e-minwon.go.kr`, `nrich.go.kr` 도메인
+- 그 밖의 사이트에서는 콘텐츠 수집, 자동 파일명 변경, 팝업 다운로드 보조 기능이 동작하지 않습니다.
+
+Safari에서는 브라우저의 다운로드 API 지원 범위가 환경마다 다를 수 있어, 자동 파일명 제안과 팝업의 `PDF 파일명으로 다운로드` 보조 버튼을 함께 제공합니다.
+
+### 설치 안내
+
+이 포크는 App Store 배포를 전제로 하지 않습니다. Safari 사용자는 Xcode로 Safari Web Extension 앱을 변환·서명·실행해서 사용하는 방식을 기본 경로로 안내합니다. 자세한 절차와 원작 README 내용은 아래 접이식 영역에 보존해두었습니다.
+
+<details>
+<summary>원본 README 펼치기</summary>
+
 # 최근 주요 업데이트 내용
 
 ## 1.7.4 버전 마이너 업데이트 사항
@@ -55,6 +96,9 @@
 # 목차
 
 - [0. 설치 방법](#0-설치-방법)
+	- [(1) 크롬 웹 스토어를 통한 설치](#1-가장-쉬운-설치-방법--크롬-웹-스토어를-통해-크롬에-바로-설치하기)
+	- [(2) 압축해제된 확장 프로그램으로 크로미움 브라우저에 설치](#2-여기github에서-zip-파일을-다운받은-뒤-크로미움-브라우저에-설치하는-방법)
+	- [(3) Safari에서 직접 빌드하여 설치하기](#3-safarimacos에서-직접-빌드하여-설치하는-방법-비공식-포크용)
 - [1. 들어가며](#1-들어가며)
 - [2. 사용법 및 기능](#2-사용법-및-기능)
 	- [(1) 핵심 기능 및 사용법](#1-핵심-기능-및-사용법)
@@ -74,11 +118,91 @@ __________________
 
 신버전이 나올 때마다 크롬 웹 스토어에도 게시할 예정이나, 구글 크롬 측에서 제출된 확장 프로그램을 검토한 후에 승인하기까지 시일이 소요되므로, 새로운 버전이 나올 때마다 빠르게 팔로업하실 분들은 지금 보시는 이 Github 리포지토리를 즐겨찾기에 등록해주시면 됩니다.
 
-## 여기(Github)에서 .zip 파일을 다운받은 뒤 크롬에 설치하는 방법
+## 여기(Github)에서 .zip 파일을 다운받은 뒤 크로미움 브라우저에 설치하는 방법
 
 여기에서는 1.7.3 버전의 패키지를 zip 파일 형태로 다운로드하여 설치할 수 있습니다.
 
 오른쪽 **Releases**에서 최신 버전의 zip파일(맨 위의 파일) 다운로드 ⇒ 압축 해제한 폴더를 원하는 아무 적당한 위치로 옮기기(이후 이 폴더 위치를 변경할 경우 확장 프로그램이 작동하기 않게 됩니다. 처음부터 추후 변경할 일이 없을 위치에 두시는 것을 권합니다) ⇒ 크롬에서 오른쪽 위의 ⠇ → 확장 프로그램 → 확장 프로그램 관리 → 오른쪽 위의 ‘개발자 모드’ on → 왼쪽 위의 ‘압축해제된 확장 프로그램을 로드합니다.’ → 압축 해제한 폴더를 ‘열기’
+
+아래 방법은 Chrome, Arc, Edge, Brave 등 크로미움(Chromium) 기반 브라우저에 대체로 동일하게 적용됩니다.
+
+## Safari(macOS)에서 직접 빌드하여 설치하는 방법 (비공식 포크용)
+
+Safari는 크로미움 브라우저처럼 폴더를 바로 불러오는 방식이 아니라, 일반적으로 Xcode를 통해 Safari Web Extension 앱으로 변환/빌드한 뒤 사용하는 방식입니다.
+
+이 절차는 특히 Safari 호환성을 추가한 비공식 포크를 사용하려는 경우에 적합합니다.
+
+### 준비물
+
+1. macOS
+2. Safari
+3. Xcode
+4. 이 저장소의 소스 코드
+
+### 1. 저장소 내려받기
+
+`git clone`으로 받거나, Github의 **Code** 버튼을 눌러 zip 파일로 내려받아 압축을 해제합니다.
+
+예시:
+
+```bash
+git clone <이-포크-저장소-주소>
+cd <저장소-폴더>
+```
+
+### 2. Safari용 Xcode 프로젝트 생성
+
+저장소 폴더 바깥(또는 원하는 작업 위치)에서 아래 명령을 실행합니다.
+
+```bash
+xcrun safari-web-extension-converter <저장소-폴더-절대경로> \
+  --project-location <생성할-프로젝트-폴더-절대경로> \
+  --app-name "Sickle Cite Safari" \
+  --bundle-identifier "com.example.SickleCiteSafari" \
+  --macos-only
+```
+
+예시:
+
+```bash
+xcrun safari-web-extension-converter ~/Desktop/sickle-cite-main \
+  --project-location ~/Desktop/sickle-cite-safari \
+  --app-name "Sickle Cite Safari" \
+  --bundle-identifier "com.example.SickleCiteSafari" \
+  --macos-only
+```
+
+### 3. Xcode에서 서명(Signing) 설정
+
+생성된 Xcode 프로젝트를 연 뒤, 다음 사항을 확인합니다.
+
+1. 앱 타깃과 확장 타깃 둘 다 `Signing & Capabilities`에서 같은 `Team`을 사용해야 합니다.
+2. 확장 타깃의 Bundle Identifier는 앱 Bundle Identifier의 하위(prefix)여야 합니다.
+
+예:
+
+- App: `com.example.SickleCiteSafari`
+- Extension: `com.example.SickleCiteSafari.Extension`
+
+Xcode 버전이나 생성 옵션에 따라 이 설정이 자동으로 맞지 않아 빌드가 실패할 수 있습니다. 이 경우 위 두 항목을 먼저 확인해주세요.
+
+### 4. 빌드 및 실행
+
+Xcode 상단의 Scheme가 앱 타깃으로 설정되어 있는지 확인한 뒤 `Run`합니다.
+
+보통 다음 순서로 진행하시면 됩니다.
+
+1. `Product > Clean Build Folder`
+2. `Run`
+3. Safari 실행
+4. `Safari > 설정 > Extensions`로 이동
+5. 생성된 `Sickle Cite Safari` 확장을 활성화
+
+### 5. 참고 사항
+
+1. 이 방식은 App Store 배포가 아니라 로컬 빌드/직접 설치 방식입니다.
+2. 포크 저장소를 사용해 Safari 지원을 추가한 경우, README나 소개 문구에 `비공식 포크`임을 명확하게 적어두는 것을 권합니다.
+3. 원작자의 공식 지원 범위에 Safari가 포함되어 있지 않다면, Safari 관련 문제는 이 포크의 변경사항에서 비롯될 수 있습니다.
 
 # 1. 들어가며
 
@@ -300,3 +424,5 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+</details>

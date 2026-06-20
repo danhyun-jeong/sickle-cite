@@ -167,7 +167,8 @@ textarea:focus,
 .actions button,
 #copy-metadata-btn,
 #save-metadata-btn,
-#copy-citation-btn {
+#copy-citation-btn,
+#download-pdf-filename-btn {
     padding: 4px 12px;
     font-size: 13px;
     color: var(--accent);
@@ -180,9 +181,15 @@ textarea:focus,
 .actions button:hover,
 #copy-metadata-btn:hover,
 #save-metadata-btn:hover,
-#copy-citation-btn:hover {
+#copy-citation-btn:hover,
+#download-pdf-filename-btn:hover:not(:disabled) {
     background: var(--accent);
     color: var(--bg);
+}
+
+#download-pdf-filename-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 #tab1 h3 {
     font-size: 18px;
@@ -539,6 +546,107 @@ border: 1px solid var(--border);
 #tab3 .instructions p {
     color: var(--text-secondary);
     font-size: 13px;
+}
+
+.citation-order-hint {
+    margin: 2px 0 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.pdf-download-status {
+    min-height: 18px;
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.pdf-download-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 420px;
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.pdf-download-options button {
+    width: 100%;
+    margin: 0;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.citation-order-builder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.citation-order-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid #d4dff0;
+    border-radius: 999px;
+    background: #edf3fb;
+    color: var(--accent);
+    user-select: none;
+    cursor: grab;
+}
+
+.citation-order-chip.dragging {
+    opacity: 0.55;
+    cursor: grabbing;
+}
+
+.citation-order-chip.drag-over {
+    box-shadow: 0 0 0 2px rgba(81, 116, 165, 0.25);
+}
+
+.citation-chip-grip {
+    color: #7b8fb1;
+    font-size: 11px;
+    letter-spacing: -1px;
+}
+
+.citation-chip-label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.citation-chip-actions {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.citation-chip-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(81, 116, 165, 0.12);
+    color: var(--accent);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.citation-chip-btn:hover:not(:disabled) {
+    background: rgba(81, 116, 165, 0.22);
+}
+
+.citation-chip-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 /* 스크롤바를 10px 오른쪽으로 당기는 방법 */

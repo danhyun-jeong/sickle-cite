@@ -46,8 +46,10 @@
           <textarea class="citation-input" placeholder=""></textarea>
           <div class="actions">
             <button id="copy-citation-btn" title="이 버튼을 누르신 후 원하는 곳에서 붙여넣기(Ctrl+V)하시면 됩니다">클립보드에 복사</button>
+            <button id="download-pdf-filename-btn" style="display: none;" title="지원 사이트에서 PDF를 인용 표기 파일명으로 다운로드합니다">PDF 파일명으로 다운로드</button>
             <button id="copy-yaml-btn" style="display: none;" title="Obsidian 앱과의 호환을 위한 옵션입니다. Frontmatter를 만들어줍니다.">YAML로 복사</button>
           </div>
+          <p id="pdf-download-status" class="pdf-download-status"></p>
         </div>
         <div class="tags-container pane-section">
           <h3>🏷️ 프로젝트 태그 추가</h3>
@@ -167,7 +169,25 @@
         <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
         <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
       </div>
-      <!-- (5) 단축키 설정 안내 -->
+      <!-- (5) 인용 조각 순서 설정 -->
+      <div class="section">
+        <h3>PDF 파일명 자동 변경</h3>
+        <label class="checkbox-label" title="지원 학술 DB와 국가유산 관련 사이트에서만 PDF 다운로드 파일명을 인용 표기식으로 바꿉니다.">
+          <span class="toggle-text">지원 사이트에서 PDF 파일명을 자동으로 바꾸기</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="pdf-filename-enabled" checked>
+            <span class="slider"></span>
+          </span>
+        </label>
+        <p class="citation-order-hint">학술 사이트와 국가유산청·지식이음·발굴조사보고서 관련 사이트에서만 작동합니다.</p>
+      </div>
+      <!-- (6) 인용 조각 순서 설정 -->
+      <div class="section">
+        <h3>인용 조각 순서</h3>
+        <p class="citation-order-hint">칩을 드래그하거나 화살표 버튼으로 순서를 바꾸세요. 비어 있는 항목은 자동으로 빠집니다.</p>
+        <div id="citation-order-builder" class="citation-order-builder"></div>
+      </div>
+      <!-- (7) 단축키 설정 안내 -->
       <div class="section">
         <h3>단축키</h3>
         <div class="instructions">
@@ -196,6 +216,14 @@
       <button id="copy-citations-cancel">취소</button>
     </div>
   </div>
+  <!-- PDF 파일명 다운로드 모달 -->
+  <div id="pdf-download-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>다운로드할 PDF를 선택하세요</h3>
+      <div id="pdf-download-options" class="pdf-download-options"></div>
+      <button id="pdf-download-cancel">취소</button>
+    </div>
+  </div>
   <!-- 서지정보 내보내기 모달 -->
   <div id="export-bibliography-modal" class="modal hidden">
     <div class="modal-content">
@@ -213,8 +241,9 @@
       <button id="export-cancel">취소</button>
     </div>
   </div>
-  <script src="popup.js"></script>
   <script src="lib/hangul.js"></script>
-  <script src="/xlsx_module/xlsx.full.min.js"></script> <!--  Uses SheetJS js xlsx under Apache-2.0 -->
+  <script src="xlsx_module/xlsx.full.min.js"></script> <!--  Uses SheetJS js xlsx under Apache-2.0 -->
+  <script src="filename_tools.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

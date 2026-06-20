@@ -2,6 +2,330 @@
 let currentMetadataGlobal = {};
 let currentTimestampIdGlobal = ''; // 현재 탭 1에 띄워져 있는 정보값을 저장된 history 중에서 식별하기 위한 전역변수
 let selectedHistoryItems = new Set(); // 탭2에서 선택된 항목들의 timestampId를 저장
+const DEFAULT_CITATION_ORDER = ['authors', 'title', 'source', 'publisher', 'year', 'pages'];
+const CITATION_SEGMENT_LABELS = {
+  authors: '저자',
+  year: '연도',
+  title: '제목',
+  source: '학술지·권호',
+  publisher: '발행기관',
+  pages: '쪽수'
+};
+const pdfFileNaming = globalThis.SickleCiteFileNaming;
+const extensionBrowser = globalThis.browser;
+const extensionChrome = globalThis.chrome;
+let citationOrderState = [...DEFAULT_CITATION_ORDER];
+let draggedCitationSegmentKey = null;
+let currentPdfDownloadOptions = [];
+
+function getRuntimeErrorMessage() {
+  return extensionChrome?.runtime?.lastError?.message || '';
+}
+
+function getStorageFallback(query) {
+  return query && typeof query === 'object' && !Array.isArray(query)
+    ? { ...query }
+    : {};
+}
+
+function getSettingsStorageArea() {
+  return extensionBrowser?.storage?.sync
+    ?? extensionBrowser?.storage?.local
+    ?? extensionChrome?.storage?.sync
+    ?? extensionChrome?.storage?.local;
+}
+
+function storageLocalGet(query, callback) {
+  if (extensionBrowser?.storage?.local) {
+    extensionBrowser.storage.local.get(query)
+      .then(callback)
+      .catch(err => {
+        console.error('local storage 조회 실패:', err);
+        callback(getStorageFallback(query));
+      });
+    return;
+  }
+
+  extensionChrome.storage.local.get(query, items => {
+    const errorMessage = getRuntimeErrorMessage();
+    if (errorMessage) {
+      console.error('local storage 조회 실패:', errorMessage);
+      callback(getStorageFallback(query));
+      return;
+    }
+    callback(items);
+  });
+}
+
+function storageLocalSet(items, callback = () => {}) {
+  if (extensionBrowser?.storage?.local) {
+    extensionBrowser.storage.local.set(items)
+      .then(() => callback())
+      .catch(err => {
+        console.error('local storage 저장 실패:', err);
+        callback();
+      });
+    return;
+  }
+
+  extensionChrome.storage.local.set(items, () => {
+    const errorMessage = getRuntimeErrorMessage();
+    if (errorMessage) {
+      console.error('local storage 저장 실패:', errorMessage);
+    }
+    callback();
+  });
+}
+
+function storageSyncGet(query, callback) {
+  const settingsStorageArea = getSettingsStorageArea();
+  if (settingsStorageArea && settingsStorageArea === extensionBrowser?.storage?.sync) {
+    settingsStorageArea.get(query)
+      .then(callback)
+      .catch(err => {
+        console.error('sync storage 조회 실패:', err);
+        callback(getStorageFallback(query));
+      });
+    return;
+  }
+
+  if (settingsStorageArea && settingsStorageArea === extensionBrowser?.storage?.local) {
+    settingsStorageArea.get(query)
+      .then(callback)
+      .catch(err => {
+        console.error('sync storage 조회 실패:', err);
+        callback(getStorageFallback(query));
+      });
+    return;
+  }
+
+  if (!settingsStorageArea) {
+    console.error('설정 저장소를 찾지 못했습니다');
+    callback(getStorageFallback(query));
+    return;
+  }
+
+  settingsStorageArea.get(query, items => {
+    const errorMessage = getRuntimeErrorMessage();
+    if (errorMessage) {
+      console.error('sync storage 조회 실패:', errorMessage);
+      callback(getStorageFallback(query));
+      return;
+    }
+    callback(items);
+  });
+}
+
+function storageSyncSet(items, callback = () => {}) {
+  const settingsStorageArea = getSettingsStorageArea();
+  if (settingsStorageArea && settingsStorageArea === extensionBrowser?.storage?.sync) {
+    settingsStorageArea.set(items)
+      .then(() => callback())
+      .catch(err => {
+        console.error('sync storage 저장 실패:', err);
+        callback();
+      });
+    return;
+  }
+
+  if (settingsStorageArea && settingsStorageArea === extensionBrowser?.storage?.local) {
+    settingsStorageArea.set(items)
+      .then(() => callback())
+      .catch(err => {
+        console.error('sync storage 저장 실패:', err);
+        callback();
+      });
+    return;
+  }
+
+  if (!settingsStorageArea) {
+    console.error('설정 저장소를 찾지 못했습니다');
+    callback();
+    return;
+  }
+
+  settingsStorageArea.set(items, () => {
+    const errorMessage = getRuntimeErrorMessage();
+    if (errorMessage) {
+      console.error('sync storage 저장 실패:', errorMessage);
+    }
+    callback();
+  });
+}
+
+function storageSyncGetAsync(query) {
+  return new Promise(resolve => storageSyncGet(query, resolve));
+}
+
+function storageSyncSetAsync(items) {
+  return new Promise(resolve => storageSyncSet(items, resolve));
+}
+
+async function queryActiveTab() {
+  if (extensionBrowser?.tabs?.query) {
+    const tabs = await extensionBrowser.tabs.query({ active: true, currentWindow: true });
+    return tabs[0];
+  }
+
+  return new Promise((resolve, reject) => {
+    extensionChrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      const errorMessage = getRuntimeErrorMessage();
+      if (errorMessage) {
+        reject(new Error(errorMessage));
+        return;
+      }
+      resolve(tabs?.[0]);
+    });
+  });
+}
+
+async function sendMessageToTab(tabId, message) {
+  if (extensionBrowser?.tabs?.sendMessage) {
+    return extensionBrowser.tabs.sendMessage(tabId, message);
+  }
+
+  return new Promise((resolve, reject) => {
+    extensionChrome.tabs.sendMessage(tabId, message, response => {
+      const errorMessage = getRuntimeErrorMessage();
+      if (errorMessage) {
+        reject(new Error(errorMessage));
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+async function executeContentScriptOnTab(tabId) {
+  if (extensionBrowser?.scripting?.executeScript) {
+    await extensionBrowser.scripting.executeScript({
+      target: { tabId },
+      files: ['filename_tools.js', 'content_script.js']
+    });
+    return;
+  }
+
+  if (extensionChrome?.scripting?.executeScript) {
+    await new Promise((resolve, reject) => {
+      extensionChrome.scripting.executeScript({
+        target: { tabId },
+        files: ['filename_tools.js', 'content_script.js']
+      }, () => {
+        const errorMessage = getRuntimeErrorMessage();
+        if (errorMessage) {
+          reject(new Error(errorMessage));
+          return;
+        }
+        resolve();
+      });
+    });
+    return;
+  }
+
+  throw new Error('현재 페이지를 새로고침한 뒤 다시 시도해주세요');
+}
+
+async function writeTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (err) {
+      console.warn('Clipboard API 복사 실패, fallback으로 재시도합니다:', err);
+    }
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('클립보드에 복사하지 못했습니다');
+  }
+}
+
+async function downloadWithBrowserApi(url, filename) {
+  const downloadsApi = extensionBrowser?.downloads ?? extensionChrome?.downloads;
+  if (!downloadsApi?.download || !url) {
+    return false;
+  }
+
+  const options = {
+    url,
+    filename,
+    conflictAction: 'uniquify'
+  };
+
+  if (extensionBrowser?.downloads?.download) {
+    await extensionBrowser.downloads.download(options);
+    return true;
+  }
+
+  return new Promise((resolve, reject) => {
+    extensionChrome.downloads.download(options, () => {
+      const errorMessage = getRuntimeErrorMessage();
+      if (errorMessage) {
+        reject(new Error(errorMessage));
+        return;
+      }
+      resolve(true);
+    });
+  });
+}
+
+function yamlScalar(value) {
+  return JSON.stringify(String(value ?? ''));
+}
+
+function yamlField(name, value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${name}: ""`;
+    if (value.length === 1) return `${name}: ${yamlScalar(value[0])}`;
+    return [`${name}:`].concat(value.map(item => `  - ${yamlScalar(item)}`)).join('\n');
+  }
+
+  return `${name}: ${yamlScalar(value)}`;
+}
+
+function toMarkdownBlockquote(text) {
+  const lines = String(text ?? '').split('\n');
+  return lines.map(line => `> ${line}`).join('\n');
+}
+
+function metadataHasValue(meta) {
+  return Boolean(meta) && Object.values(meta).some(
+    value => value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0)
+  );
+}
+
+function normalizeCitationOrder(order) {
+  const normalized = [];
+  const seen = new Set();
+
+  if (Array.isArray(order)) {
+    order.forEach(key => {
+      if (DEFAULT_CITATION_ORDER.includes(key) && !seen.has(key)) {
+        normalized.push(key);
+        seen.add(key);
+      }
+    });
+  }
+
+  DEFAULT_CITATION_ORDER.forEach(key => {
+    if (!seen.has(key)) normalized.push(key);
+  });
+
+  return normalized;
+}
 
 // ----------------------------------------------------------------
 
@@ -81,7 +405,7 @@ if (copyBtn) {
       return;
     }
     const citationText = document.querySelector('textarea.citation-input')?.value || '';
-    navigator.clipboard.writeText(citationText)
+    writeTextToClipboard(citationText)
       .then(() => {
         console.log('조합된 인용 표기가 클립보드에 복사되었습니다:', citationText);
         showToast('조합된 인용 표기가 클립보드에 복사되었습니다');
@@ -101,7 +425,7 @@ if (copyMetadataBtn) {
       return;
     }
     const metadataText = getMetadataText(currentMetadataGlobal);
-    navigator.clipboard.writeText(metadataText)
+    writeTextToClipboard(metadataText)
       .then(() => {
         console.log('서지정보가 클립보드에 복사되었습니다:', metadataText);
         showToast('서지정보가 클립보드에 복사되었습니다');
@@ -137,48 +461,16 @@ function copyYamlToClipboard() {
     return;
   }
 
-  // author 부분
-  let authorYaml;
-  if (Array.isArray(meta.authors)) {
-    if (meta.authors.length === 1) {
-      authorYaml = `author: ${meta.authors[0]}`;
-    } else if (meta.authors.length > 1) {
-      authorYaml = ['author:'].concat(meta.authors.map(name => `  - ${name}`)).join('\n');
-    } else {
-      authorYaml = 'author: ';
-    }
-  } else {
-    authorYaml = `author: ${meta.authors || ''}`;
-  }
-
-  // keywords 부분
-  let keywordsYaml;
-  if (Array.isArray(meta.keywords)) {
-    if (meta.keywords.length === 1) {
-      keywordsYaml = `keywords: ${meta.keywords[0]}`;
-    } else if (meta.keywords.length > 1) {
-      keywordsYaml = ['keywords:'].concat(meta.keywords.map(kw => `  - ${kw}`)).join('\n');
-    } else {
-      keywordsYaml = 'keywords: ';
-    }
-  } else {
-    keywordsYaml = `keywords: ${meta.keywords || ''}`;
-  }
-  
   // projectTags 정보를 가져온 후 YAML 생성하여 클립보드에 복사
-  chrome.storage.local.get({ history: [] }, items => {
-    let projectTagsYaml = 'project: ';
+  storageLocalGet({ history: [] }, items => {
+    let projectTagsYaml = 'project: ""';
     
     if (currentTimestampIdGlobal) {
       const history = items.history;
       const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
       
       if (item && item.projectTags && Array.isArray(item.projectTags) && item.projectTags.length > 0) {
-        if (item.projectTags.length === 1) {
-          projectTagsYaml = `project: ${item.projectTags[0]}`;
-        } else {
-          projectTagsYaml = ['project:'].concat(item.projectTags.map(tag => `  - ${tag}`)).join('\n');
-        }
+        projectTagsYaml = yamlField('project', item.projectTags);
       }
     }
     
@@ -196,25 +488,25 @@ function copyYamlToClipboard() {
     
     const yamlText = [
       '---',
-      authorYaml,
-      `title: ${meta.title_main}`,
-      `subtitle: ${meta.title_sub}`,
-      `journal: ${meta.journal_name}`,
-      `volume-issue: ${volumeIssue}`,
-      `publishing_society: ${meta.publisher}`,
-      `year: "${meta.year}"`,
-      `citation: ${citation}`,
-      keywordsYaml,
-      'PDF: ',
-      'tags: ',
+      yamlField('author', meta.authors),
+      yamlField('title', meta.title_main),
+      yamlField('subtitle', meta.title_sub),
+      yamlField('journal', meta.journal_name),
+      yamlField('volume-issue', volumeIssue),
+      yamlField('publishing_society', meta.publisher),
+      yamlField('year', meta.year),
+      yamlField('citation', citation),
+      yamlField('keywords', meta.keywords),
+      'PDF: ""',
+      'tags: ""',
       projectTagsYaml,
       'check: false',
       '---',
       `> [!abstract] 초록`,
-      `> ${meta.abstract}`
+      toMarkdownBlockquote(meta.abstract)
     ].join('\n') + '\n\n';
     
-    navigator.clipboard.writeText(yamlText)
+    writeTextToClipboard(yamlText)
       .then(() => {
         console.log('서지정보(YAML)가 클립보드에 복사되었습니다:', yamlText);
         showToast('서지정보(YAML)가 클립보드에 복사되었습니다');
@@ -227,12 +519,12 @@ function copyYamlToClipboard() {
 const saveMetaBtn = document.getElementById('save-metadata-btn');
 if (saveMetaBtn) {
   saveMetaBtn.addEventListener('click', () => {
-    chrome.storage.local.get({ history: [] }, items => {
+    storageLocalGet({ history: [] }, items => {
       const history = items.history;
       const idx = history.findIndex(item => item.timestampId === currentTimestampIdGlobal);
       if (idx >= 0) {
         history[idx].metadata = { ...currentMetadataGlobal };
-        chrome.storage.local.set({ history }, () => {
+        storageLocalSet({ history }, () => {
           showToast('서지정보의 직접 수정이 내역에 저장되었습니다');
           renderHistory();
         });
@@ -363,7 +655,7 @@ function isSameArticleBase(a, b) {
 
 // popup 실행 후, 동일 논문 중 가장 이른 내역의 메타데이터와 태그를 불러와서 필드에 채움
 function applyEarliestDuplicate(pageInfo) {
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     const matchedItems = items.history.filter(item => isSameArticleBase(item, pageInfo));
     if (matchedItems.length > 0) {
       // timestampId 오름차순 정렬 → 가장 이른 항목 선택
@@ -422,17 +714,23 @@ function setScrollbarWin() {
 
 // 메타 1: PageInfo(Metadata + AcademicDB + URL + Timestamp + Timestamp ID) 요청
 async function requestPageInfo() {
-  // 현재 활성 탭 정보 가져오기
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  // content_script.js를 탭에 주입
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['content_script.js']
-  });
-  // GET_PAGE_INFO 메시지 전송 및 응답 대기
-  const response = await new Promise(resolve => {
-    chrome.tabs.sendMessage(tab.id, { action: 'GET_PAGE_INFO' }, resolve);
-  });
+  const tab = await queryActiveTab();
+  if (!tab?.id) {
+    throw new Error('현재 활성 탭을 찾지 못했습니다');
+  }
+
+  let response;
+  try {
+    response = await sendMessageToTab(tab.id, { action: 'GET_PAGE_INFO' });
+  } catch (err) {
+    try {
+      await executeContentScriptOnTab(tab.id);
+      response = await sendMessageToTab(tab.id, { action: 'GET_PAGE_INFO' });
+    } catch (retryErr) {
+      throw new Error('현재 페이지를 새로고침한 뒤 다시 시도해주세요');
+    }
+  }
+
   if (!response?.success) {
     throw new Error(response?.error || '페이지 정보 요청 실패');
   }
@@ -543,9 +841,8 @@ function updateCurrentMetadata(meta) {
 }
 
 // 메타 1~3 종합
-async function fetchCurrentMetadata() {
-  // 추출된(받아온) 최초 메타테이터를 recievedMetadata에 저장
-  const { metadata: recievedMetadata, academicDB, url, timestamp } = await requestPageInfo();
+async function fetchCurrentMetadata(pageInfo) {
+  const recievedMetadata = pageInfo?.metadata;
   if (!recievedMetadata) {
     showToastError('논문 서지정보가 존재하지 않거나,\n아직 지원하지 않는 페이지입니다');
     return;
@@ -579,7 +876,7 @@ function clearTagsInputList() {
 function loadProjectTags() {
   if (!currentTimestampIdGlobal) return;
   clearTagsInputList();
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     const history = items.history;
     const item = history.find(item => item.timestampId === currentTimestampIdGlobal);
     if (item && item.projectTags && Array.isArray(item.projectTags)) {
@@ -592,7 +889,7 @@ function loadProjectTags() {
 // 태그 3: 태그를 저장하는 함수
 function saveTags(tags) {
   const uniqueTags = [...new Set(tags)];
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     const history = items.history;
     const targetItem = history.find(item => item.timestampId === currentTimestampIdGlobal);
     if (targetItem) {
@@ -601,7 +898,7 @@ function saveTags(tags) {
           item.projectTags = uniqueTags;
         }
       });
-      chrome.storage.local.set({ history }, () => {
+      storageLocalSet({ history }, () => {
         renderHistory();
       });
     }
@@ -654,7 +951,7 @@ function setupTagInputUI() {
   // 자동완성 후보 수집용 allTagCandidates 선언 및 초기화
   let allTagCandidates = [];
   function updateAllTagCandidates() {
-    chrome.storage.local.get({ history: [] }, items => {
+    storageLocalGet({ history: [] }, items => {
       const tags = items.history.flatMap(item => item.projectTags || []);
       allTagCandidates = [...new Set(tags)];
     });
@@ -839,34 +1136,72 @@ function setupTagInputUI() {
 
 // 인용 처리 -----------------------
 
-// 인용 1: 메타데이터와 인용 양식 설정값을 조합해 최종적인 인용(citation)을 도출
-function getCombinedCitation(meta, style) {
-  // 서브타이틀이 없으면 구분 기호 제거
+function getTitleSegment(meta, style) {
   const checkedSeparator = meta.title_sub ? style.titleSeparator : '';
-  const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join('·') : meta.authors;
+  const titleText = `${meta.title_main || ''}${checkedSeparator}${meta.title_sub || ''}`.trim();
+  if (!titleText) return '';
+  return `${style.titleBracketLeft}${titleText}${style.titleBracketRight}`;
+}
+
+function getVolumeIssueSegment(meta, style) {
   const hasVol = meta.volume !== '';
   const hasIss = meta.issue !== '';
-  let pageRangePart = '';
-  // page_first와 page_last가 둘 다 비어있지 않고, pageRangeInclude가 true일 때만 페이지 범위 포함
-  if (style.pageRangeInclude && meta.page_first !== '' && meta.page_last !== '') {
-    pageRangePart = `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
-  }
-  let combinedCitation = '';
-  // 권수와 호수 둘 다 있을 경우
+
   if (hasVol && hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-  // 권수와 호수 둘 중 하나만 있을 경우
-  } else if (hasVol || hasIss) {
-    combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight} ${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-  } else {
-    // 학술지명 값이 비어 있을 경우(학위논문일 경우 등) 학술지명 부분 전체를 제거 ("『』, "이 나타나지 않도록)
-    if (!meta.journal_name) {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-    } else {
-      combinedCitation = `${combinedAuthors}, ${style.titleBracketLeft}${meta.title_main}${checkedSeparator}${meta.title_sub}${style.titleBracketRight}, ${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}, ${meta.publisher}, ${meta.year}${pageRangePart}.`;
-    }
+    return `${style.volumePrefix}${meta.volume}${style.volumeSuffix}${style.volumeIssueSeparator}${style.issuePrefix}${meta.issue}${style.issueSuffix}`.trim();
   }
-  return combinedCitation;
+
+  if (hasVol || hasIss) {
+    return `${style.eitherPrefix}${meta.volume}${meta.issue}${style.eitherSuffix}`.trim();
+  }
+
+  return '';
+}
+
+function getSourceSegment(meta, style) {
+  const journalSegment = meta.journal_name
+    ? `${style.journalBracketLeft}${meta.journal_name}${style.journalBracketRight}`
+    : '';
+  const volumeIssueSegment = getVolumeIssueSegment(meta, style);
+
+  if (journalSegment && volumeIssueSegment) {
+    return `${journalSegment} ${volumeIssueSegment}`;
+  }
+
+  return journalSegment || volumeIssueSegment;
+}
+
+function getPageRangeSegment(meta, style) {
+  if (!style.pageRangeInclude || meta.page_first === '' || meta.page_last === '') {
+    return '';
+  }
+
+  return `${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`;
+}
+
+function getCitationSegments(meta, style) {
+  const combinedAuthors = Array.isArray(meta.authors) ? meta.authors.join('·') : meta.authors;
+
+  return {
+    authors: combinedAuthors || '',
+    year: meta.year || '',
+    title: getTitleSegment(meta, style),
+    source: getSourceSegment(meta, style),
+    publisher: meta.publisher || '',
+    pages: getPageRangeSegment(meta, style)
+  };
+}
+
+// 인용 1: 메타데이터와 인용 양식 설정값을 조합해 최종적인 인용(citation)을 도출
+function getCombinedCitation(meta, style) {
+  const citationSegments = getCitationSegments(meta, style);
+  const orderedSegments = normalizeCitationOrder(style.citationOrder)
+    .map(key => citationSegments[key])
+    .filter(segment => typeof segment === 'string' && segment.trim() !== '');
+
+  if (orderedSegments.length === 0) return '';
+
+  return `${orderedSegments.join(', ')}.`;
 }
 
 // 인용 2: 탭1 우측 textarea에 조합된 citation을 삽입 -> 이벤트 리스너가 있는 다른 함수에서 호출
@@ -888,49 +1223,234 @@ function fillCitation(meta) {
 
 //////////////////////////////////////////////////////////////////////////////
 
+// PDF 파일명 다운로드 처리 -----------------------
+
+async function getPdfFilenameEnabled() {
+  if (!pdfFileNaming) return false;
+  const items = await storageSyncGetAsync({ [pdfFileNaming.PDF_FILENAME_ENABLED_KEY]: true });
+  return pdfFileNaming.isPdfFilenameEnabled(items);
+}
+
+function setPdfDownloadStatus(message) {
+  const status = document.getElementById('pdf-download-status');
+  if (status) status.textContent = message || '';
+}
+
+function setPdfDownloadButtonState({ visible, disabled, label }) {
+  const button = document.getElementById('download-pdf-filename-btn');
+  if (!button) return;
+  button.style.display = visible ? '' : 'none';
+  button.disabled = Boolean(disabled);
+  if (label) button.textContent = label;
+}
+
+function filenameForDownloadOption(option) {
+  if (!pdfFileNaming || !option?.context) return 'Sickle-Cite PDF.pdf';
+  if (option.kind === 'report' || option.context.kind === 'report') {
+    return pdfFileNaming.renderReportFilename(option.context.report);
+  }
+  const metadata = metadataHasValue(currentMetadataGlobal)
+    ? currentMetadataGlobal
+    : option.context.metadata;
+  return pdfFileNaming.renderAcademicFilename(metadata, getStyleSettings());
+}
+
+async function requestPdfDownloadOptionsFromTab(tab) {
+  if (!tab?.id || !pdfFileNaming?.GET_DOWNLOAD_OPTIONS_ACTION) return [];
+  try {
+    const response = await sendMessageToTab(tab.id, { action: pdfFileNaming.GET_DOWNLOAD_OPTIONS_ACTION });
+    if (response?.success && Array.isArray(response.options)) return response.options;
+  } catch (_error) {
+    try {
+      await executeContentScriptOnTab(tab.id);
+      const response = await sendMessageToTab(tab.id, { action: pdfFileNaming.GET_DOWNLOAD_OPTIONS_ACTION });
+      if (response?.success && Array.isArray(response.options)) return response.options;
+    } catch (_retryError) {
+      return [];
+    }
+  }
+  return [];
+}
+
+async function refreshPdfDownloadControls() {
+  if (!pdfFileNaming) {
+    setPdfDownloadButtonState({ visible: false, disabled: true });
+    return;
+  }
+
+  const enabled = await getPdfFilenameEnabled();
+  const tab = await queryActiveTab().catch(() => null);
+  const allowed = Boolean(tab?.url && pdfFileNaming.isAllowedUrl(tab.url));
+
+  if (!allowed) {
+    currentPdfDownloadOptions = [];
+    setPdfDownloadButtonState({ visible: false, disabled: true });
+    setPdfDownloadStatus('');
+    return;
+  }
+
+  if (!enabled) {
+    currentPdfDownloadOptions = [];
+    setPdfDownloadButtonState({ visible: true, disabled: true, label: 'PDF 파일명으로 다운로드' });
+    setPdfDownloadStatus('PDF 파일명 자동 변경이 꺼져 있습니다.');
+    return;
+  }
+
+  const options = await requestPdfDownloadOptionsFromTab(tab);
+  currentPdfDownloadOptions = options;
+  if (!options.length) {
+    setPdfDownloadButtonState({ visible: true, disabled: true, label: 'PDF 파일명으로 다운로드' });
+    setPdfDownloadStatus('이 페이지에서 다운로드할 PDF 후보를 아직 찾지 못했습니다.');
+    return;
+  }
+
+  setPdfDownloadButtonState({
+    visible: true,
+    disabled: false,
+    label: options.length > 1 ? `PDF ${options.length}개 중 선택` : 'PDF 파일명으로 다운로드'
+  });
+  setPdfDownloadStatus('지원 사이트입니다. PDF 다운로드 파일명을 인용 표기식으로 바꿀 수 있습니다.');
+}
+
+function closePdfDownloadModal() {
+  document.getElementById('pdf-download-modal')?.classList.add('hidden');
+}
+
+function openPdfDownloadModal() {
+  const modal = document.getElementById('pdf-download-modal');
+  const optionsContainer = document.getElementById('pdf-download-options');
+  if (!modal || !optionsContainer) return;
+  optionsContainer.innerHTML = '';
+  currentPdfDownloadOptions.forEach(option => {
+    const button = document.createElement('button');
+    const filename = filenameForDownloadOption(option);
+    button.type = 'button';
+    button.textContent = `${option.label || 'PDF'} → ${filename}`;
+    button.title = filename;
+    button.addEventListener('click', async () => {
+      closePdfDownloadModal();
+      await startPdfDownloadOption(option);
+    });
+    optionsContainer.appendChild(button);
+  });
+  modal.classList.remove('hidden');
+}
+
+async function startPdfDownloadOption(option) {
+  if (!option) return;
+  const filename = filenameForDownloadOption(option);
+  try {
+    if (option.directDownload && option.url && await downloadWithBrowserApi(option.url, filename)) {
+      showToast('PDF를 인용 표기 파일명으로 다운로드합니다');
+      return;
+    }
+
+    const tab = await queryActiveTab();
+    const response = await sendMessageToTab(tab.id, {
+      action: pdfFileNaming.START_NAMED_DOWNLOAD_ACTION,
+      optionId: option.optionId,
+      filename
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || '다운로드를 시작하지 못했습니다');
+    }
+    showToast('PDF 다운로드를 시작했습니다');
+  } catch (error) {
+    console.error('PDF 파일명 다운로드 실패:', error);
+    try {
+      await writeTextToClipboard(filename);
+      showToastError(`자동 다운로드가 실패했습니다.\n파일명은 클립보드에 복사했습니다`);
+    } catch (_clipboardError) {
+      showToastError(error?.message || 'PDF 다운로드를 시작하지 못했습니다');
+    }
+  }
+}
+
+function setupPdfFilenameControls() {
+  const toggle = document.getElementById('pdf-filename-enabled');
+  const downloadButton = document.getElementById('download-pdf-filename-btn');
+  const cancelButton = document.getElementById('pdf-download-cancel');
+
+  if (toggle && pdfFileNaming) {
+    getPdfFilenameEnabled().then(enabled => {
+      toggle.checked = enabled;
+      refreshPdfDownloadControls();
+    });
+    toggle.addEventListener('change', async () => {
+      await storageSyncSetAsync({ [pdfFileNaming.PDF_FILENAME_ENABLED_KEY]: toggle.checked });
+      showToast(toggle.checked ? 'PDF 파일명 자동 변경을 켰습니다' : 'PDF 파일명 자동 변경을 껐습니다');
+      await refreshPdfDownloadControls();
+    });
+  }
+
+  if (downloadButton) {
+    downloadButton.addEventListener('click', async () => {
+      if (!currentPdfDownloadOptions.length) {
+        await refreshPdfDownloadControls();
+      }
+      if (currentPdfDownloadOptions.length === 1) {
+        await startPdfDownloadOption(currentPdfDownloadOptions[0]);
+        return;
+      }
+      if (currentPdfDownloadOptions.length > 1) {
+        openPdfDownloadModal();
+      }
+    });
+  }
+
+  if (cancelButton) {
+    cancelButton.addEventListener('click', closePdfDownloadModal);
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
 // 히스토리 처리 -----------------------
 
 // 히스토리 1: 히스토리에 pageInfo 추가(저장)
 function savePageInfoToHistory(pageInfo) {
-  chrome.storage.local.get({ history: [] }, items => {
-    const merged = items.history.concat(pageInfo);
-    // 같은 논문인지 판별하는 함수
-    function isSameArticle(a, b) {
-      const aKeys = Object.keys(a);
-      const bKeys = Object.keys(b);
-      if (aKeys.length !== bKeys.length) return false;
-      return aKeys.every(key => {
-        const valA = a[key];
-        const valB = b[key];
-        if (Array.isArray(valA) && Array.isArray(valB)) {
-          return valA.length === valB.length && valA.every((v, i) => v === valB[i]);
-        }
-        return valA === valB;
+  return new Promise(resolve => {
+    storageLocalGet({ history: [] }, items => {
+      const merged = items.history.concat(pageInfo);
+      // 같은 논문인지 판별하는 함수
+      function isSameArticle(a, b) {
+        const aKeys = Object.keys(a);
+        const bKeys = Object.keys(b);
+        if (aKeys.length !== bKeys.length) return false;
+        return aKeys.every(key => {
+          const valA = a[key];
+          const valB = b[key];
+          if (Array.isArray(valA) && Array.isArray(valB)) {
+            return valA.length === valB.length && valA.every((v, i) => v === valB[i]);
+          }
+          return valA === valB;
+        });
+      }
+      // 중복 제거
+      const uniqueHistory = [];
+      merged.forEach(item => {
+        const exists = uniqueHistory.some(u =>
+          u.academicDB === item.academicDB &&
+          u.url === item.url &&
+          u.timestamp === item.timestamp &&
+          isSameArticle(u.metadata, item.metadata)
+        );
+        if (!exists) uniqueHistory.push(item);
       });
-    }
-    // 중복 제거
-    const uniqueHistory = [];
-    merged.forEach(item => {
-      const exists = uniqueHistory.some(u =>
-        u.academicDB === item.academicDB &&
-        u.url === item.url &&
-        u.timestamp === item.timestamp &&
-        isSameArticle(u.metadata, item.metadata)
-      );
-      if (!exists) uniqueHistory.push(item);
-    });
-    // 저장
-    chrome.storage.local.set({ history: uniqueHistory }, () => {
-      console.log('히스토리 저장 및 중복 제거 완료:', uniqueHistory);
-      // 저장 후 UI 갱신
-      renderHistory();
+      // 저장
+      storageLocalSet({ history: uniqueHistory }, () => {
+        console.log('히스토리 저장 및 중복 제거 완료:', uniqueHistory);
+        // 저장 후 UI 갱신
+        renderHistory();
+        resolve(uniqueHistory);
+      });
     });
   });
 }
 
 // 히스토리 2: 탭2에 히스토리 표 생성
 function renderHistory() {
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     // 히스토리 데이터 불러오기
     const rawHistory = items.history.slice();
     // 검색 필터링 (공백 단위 분할, 모든 키워드 포함 여부)
@@ -1290,7 +1810,7 @@ function deleteSelectedHistoryItems() {
   const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
   const isDedup = document.getElementById('deduplicate')?.checked;
 
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     let idsToDelete = selectedIds;
 
     // 중복 제거 토글이 ON일 때: 같은 논문으로 취급되는 모든 항목 삭제
@@ -1311,7 +1831,7 @@ function deleteSelectedHistoryItems() {
     }
 
     const filtered = items.history.filter(item => !idsToDelete.includes(item.timestampId.toString()));
-    chrome.storage.local.set({ history: filtered }, () => {
+    storageLocalSet({ history: filtered }, () => {
       // 삭제된 항목들을 selectedHistoryItems에서도 제거
       idsToDelete.forEach(id => selectedHistoryItems.delete(id));
       showToast('선택한 항목이 삭제되었습니다');
@@ -1363,7 +1883,7 @@ function checkForDuplicatesInSelection() {
   
   // 선택된 항목들 가져오기
   return new Promise(resolve => {
-    chrome.storage.local.get({ history: [] }, items => {
+    storageLocalGet({ history: [] }, items => {
       const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
       
       // 중복 검사
@@ -1385,7 +1905,7 @@ function copySelectedCitations() {
   const checkboxes = document.querySelectorAll('#history-list tbody input[type="checkbox"]:checked');
   const selectedIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.timestampId);
   
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
     const styleSettings = getStyleSettings();
     
@@ -1433,7 +1953,7 @@ function copySelectedCitations() {
     // 클립보드 복사 실행 함수
     window.copyCitationsToClipboard = () => {
       const citationText = citations.join('\n');
-      navigator.clipboard.writeText(citationText)
+      writeTextToClipboard(citationText)
         .then(() => {
           showToast('선택된 논문들의 인용 표기 전체가 클립보드에 복사되었습니다');
           document.getElementById('copy-citations-modal').classList.add('hidden');
@@ -1448,7 +1968,7 @@ function copySelectedCitations() {
 
 // 히스토리 d-1. 선택된 항목들을 엑셀로 다운로드하는 함수
 function downloadSelectedItemsExcel(selectedIds) {
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     // 선택된 항목들만 필터링
     const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
     
@@ -1517,7 +2037,7 @@ function downloadSelectedItemsExcel(selectedIds) {
 
 // 히스토리 d-2. 선택된 항목들을 RIS 파일로 다운로드하는 함수
 function downloadSelectedItemsRis(selectedIds) {
-  chrome.storage.local.get({ history: [] }, items => {
+  storageLocalGet({ history: [] }, items => {
     // 선택된 항목들만 필터링
     const selectedItems = items.history.filter(item => selectedIds.includes(item.timestampId.toString()));
     
@@ -1803,6 +2323,146 @@ function reRenderHistorySearch() {
 
 // 설정 처리 -----------------------
 
+function applyCitationOrder(order, options = {}) {
+  citationOrderState = normalizeCitationOrder(order);
+  renderCitationOrderBuilder();
+
+  if (options.persist) {
+    saveStyleSettings();
+    fillCitation(currentMetadataGlobal);
+    renderHistory();
+  }
+}
+
+function moveCitationSegment(key, direction) {
+  const currentIndex = citationOrderState.indexOf(key);
+  const nextIndex = currentIndex + direction;
+
+  if (currentIndex === -1 || nextIndex < 0 || nextIndex >= citationOrderState.length) {
+    return;
+  }
+
+  const nextOrder = [...citationOrderState];
+  [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
+  applyCitationOrder(nextOrder, { persist: true });
+}
+
+function moveCitationSegmentBefore(targetKey) {
+  if (!draggedCitationSegmentKey || draggedCitationSegmentKey === targetKey) {
+    return;
+  }
+
+  const nextOrder = citationOrderState.filter(key => key !== draggedCitationSegmentKey);
+  const targetIndex = nextOrder.indexOf(targetKey);
+  if (targetIndex === -1) return;
+
+  nextOrder.splice(targetIndex, 0, draggedCitationSegmentKey);
+  applyCitationOrder(nextOrder, { persist: true });
+}
+
+function clearCitationDragState() {
+  draggedCitationSegmentKey = null;
+  document.querySelectorAll('.citation-order-chip').forEach(chip => {
+    chip.classList.remove('dragging', 'drag-over');
+  });
+}
+
+function renderCitationOrderBuilder() {
+  const builder = document.getElementById('citation-order-builder');
+  if (!builder) return;
+
+  builder.innerHTML = '';
+  builder.ondragover = event => event.preventDefault();
+  builder.ondrop = event => {
+    event.preventDefault();
+    if (event.target === builder && draggedCitationSegmentKey) {
+      const nextOrder = citationOrderState.filter(key => key !== draggedCitationSegmentKey);
+      nextOrder.push(draggedCitationSegmentKey);
+      applyCitationOrder(nextOrder, { persist: true });
+    }
+    clearCitationDragState();
+  };
+
+  citationOrderState.forEach((key, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'citation-order-chip';
+    chip.dataset.key = key;
+    chip.draggable = true;
+
+    const grip = document.createElement('span');
+    grip.className = 'citation-chip-grip';
+    grip.textContent = '::';
+
+    const label = document.createElement('span');
+    label.className = 'citation-chip-label';
+    label.textContent = CITATION_SEGMENT_LABELS[key];
+
+    const actions = document.createElement('div');
+    actions.className = 'citation-chip-actions';
+
+    const leftButton = document.createElement('button');
+    leftButton.type = 'button';
+    leftButton.className = 'citation-chip-btn';
+    leftButton.textContent = '←';
+    leftButton.title = '왼쪽으로 이동';
+    leftButton.disabled = index === 0;
+    leftButton.addEventListener('click', event => {
+      event.stopPropagation();
+      moveCitationSegment(key, -1);
+    });
+
+    const rightButton = document.createElement('button');
+    rightButton.type = 'button';
+    rightButton.className = 'citation-chip-btn';
+    rightButton.textContent = '→';
+    rightButton.title = '오른쪽으로 이동';
+    rightButton.disabled = index === citationOrderState.length - 1;
+    rightButton.addEventListener('click', event => {
+      event.stopPropagation();
+      moveCitationSegment(key, 1);
+    });
+
+    actions.appendChild(leftButton);
+    actions.appendChild(rightButton);
+    chip.appendChild(grip);
+    chip.appendChild(label);
+    chip.appendChild(actions);
+
+    chip.addEventListener('dragstart', event => {
+      draggedCitationSegmentKey = key;
+      chip.classList.add('dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', key);
+      }
+    });
+
+    chip.addEventListener('dragover', event => {
+      event.preventDefault();
+      if (draggedCitationSegmentKey && draggedCitationSegmentKey !== key) {
+        chip.classList.add('drag-over');
+      }
+    });
+
+    chip.addEventListener('dragleave', () => {
+      chip.classList.remove('drag-over');
+    });
+
+    chip.addEventListener('drop', event => {
+      event.preventDefault();
+      chip.classList.remove('drag-over');
+      moveCitationSegmentBefore(key);
+      clearCitationDragState();
+    });
+
+    chip.addEventListener('dragend', () => {
+      clearCitationDragState();
+    });
+
+    builder.appendChild(chip);
+  });
+}
+
 // 설정 1: 탭3의 설정값을 객체로 반환
 function getStyleSettings() {
   // 제목·부제목 구분 기호
@@ -1879,6 +2539,7 @@ function getStyleSettings() {
     titleBracketRight,
     journalBracketLeft,
     journalBracketRight,
+    citationOrder: [...citationOrderState],
     pageRangeInclude, // 유일하게 이것만 불리언
     pageRangeSeparator,
     pageRangeUnit
@@ -1888,7 +2549,7 @@ function getStyleSettings() {
 // 설정 2: 탭3의 설정값 객체를 저장 (설정 1을 포함)
 function saveStyleSettings() {
   const styleSettings = getStyleSettings();
-  chrome.storage.sync.set(styleSettings, () => {
+  storageSyncSet(styleSettings, () => {
     console.log('인용 양식 설정 변경사항 저장됨:', styleSettings);
   });
 }
@@ -1911,7 +2572,7 @@ function resaveChangedStyleSettings() {
 
 // 설정 4: 저장된 인용 양식 설정값을 불러와 탭3 재구성(popup을 다시 열었을 때)
 function restoreStyleSettings() {
-  chrome.storage.sync.get({
+  storageSyncGet({
     titleSeparator: ' — ',
     volumePrefix: '',
     volumeSuffix: '',
@@ -1924,6 +2585,7 @@ function restoreStyleSettings() {
     titleBracketRight: '」',
     journalBracketLeft: '『',
     journalBracketRight: '』',
+    citationOrder: [...DEFAULT_CITATION_ORDER],
     pageRangeInclude: false,
     pageRangeSeparator: '–',
     pageRangeUnit: '쪽'
@@ -1955,6 +2617,8 @@ function restoreStyleSettings() {
     document.querySelector('input[name="title-brackets"]').checked = items.titleBracketLeft === '〈';
     // 겹낫표 복원
     document.querySelector('input[name="journal-brackets"]').checked = items.journalBracketLeft === '《';
+    // 인용 조각 순서 복원
+    applyCitationOrder(items.citationOrder);
     // 쪽수 범위 표기 복원
     document.querySelector('input[name="page-range-include"]').checked = items.pageRangeInclude;
     document.querySelector('input[name="page-range-separator"]').value = items.pageRangeSeparator;
@@ -1967,28 +2631,26 @@ function restoreStyleSettings() {
 // ********* 실행 *********
 
 // DOM이 로드되는 것을 리슨하여,
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // 1. 저장된 인용 양식 설정값을 불러와 탭3 재구성하기
   restoreStyleSettings();
-  // 2. 실행 시마다 pageInfo를 history에 저장
-  requestPageInfo()
-    .then(pageInfo => {
-      currentTimestampIdGlobal = pageInfo.timestampId; // 추출한 정보 중 타임스탬프ID를 전역변수에 저장
-      savePageInfoToHistory(pageInfo); // 추출한 정보를 히스토리에 저장
-      applyEarliestDuplicate(pageInfo); // 이미 저장된 논문이면 알림을 띄우고 가장 이른 중복 논문의 서지정보와 태그를 가져와서 채움
-    })
-    .catch(err => console.log('히스토리 저장 실패.', err));
-  // 3. 메타데이터 불러오고 탭1의 각 필드에 넣기(recievedMetadata). 직접 수정 발생 시 이를 업데이트하기, 조합된 인용 표기 채워 넣기
-  fetchCurrentMetadata()
-    .then(currentMetadata => {
-      currentMetadataGlobal = currentMetadata || {};
-      fillCitation(currentMetadataGlobal);
-      loadProjectTags();
-    })
-    .catch(err => {
-      console.log(err);
-      showToastError('논문 서지정보가 존재하지 않거나,\n아직 지원하지 않는 페이지입니다');
-    });
+  setupPdfFilenameControls();
+  // 2. pageInfo를 한 번만 받아 히스토리 저장과 현재 화면 렌더링에 함께 사용
+  try {
+    const pageInfo = await requestPageInfo();
+    currentTimestampIdGlobal = pageInfo.timestampId; // 추출한 정보 중 타임스탬프ID를 전역변수에 저장
+    await savePageInfoToHistory(pageInfo); // 추출한 정보를 히스토리에 저장
+    applyEarliestDuplicate(pageInfo); // 이미 저장된 논문이면 알림을 띄우고 가장 이른 중복 논문의 서지정보와 태그를 가져와서 채움
+
+    const currentMetadata = await fetchCurrentMetadata(pageInfo);
+    currentMetadataGlobal = currentMetadata || {};
+    fillCitation(currentMetadataGlobal);
+    loadProjectTags();
+  } catch (err) {
+    console.error('팝업 초기화 실패:', err);
+    showToastError(err?.message || '논문 서지정보가 존재하지 않거나,\n아직 지원하지 않는 페이지입니다');
+  }
+  refreshPdfDownloadControls();
   // 4. 탭3의 설정 변경 시 이를 재저장하기
   resaveChangedStyleSettings();
   // 5. 히스토리 탭 렌더링, 이벤트 리슨하여 리렌더링, 다운로드

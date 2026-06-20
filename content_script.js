@@ -1,3 +1,11 @@
+const runtimeApi = globalThis.browser?.runtime ?? globalThis.chrome?.runtime;
+const storageApi = globalThis.browser?.storage ?? globalThis.chrome?.storage;
+const fileNamingApi = globalThis.SickleCiteFileNaming;
+let pdfFilenameFeatureEnabled = true;
+let lastDownloadContextSentAt = 0;
+const DOWNLOAD_CONTEXT_DEBOUNCE_MS = 300;
+const forcedDownloadControls = new WeakSet();
+
 function getAcademicDBType() {
   const url = window.location.href;
   if (/^https:\/\/[^\/]*riss[^\/]*\/search\/detail\/DetailView\.do\?/.test(url))
@@ -33,10 +41,10 @@ function fixTypography(text) {
   s = s.replace(/"([^\"]+)"/g, '“$1”');
   s = s.replace(/''([^\"]+)''/g, '“$1”');
   s = s.replace(/″([^\"]+)″/g, '“$1”');
-  s = s.replace(/</g, '〈').replace(/>/g, '〉');
-  s = s.replace(/｢/g, '「').replace(/｣/g, '」');
   s = s.replace(/<</g, '《').replace(/>>/g, '》');
   s = s.replace(/≪/g, '《').replace(/≫/g, '》');
+  s = s.replace(/</g, '〈').replace(/>/g, '〉');
+  s = s.replace(/｢/g, '「').replace(/｣/g, '」');
   s = s.replace(/\.{3}/g, '…');
   s = s.replace(/[•ㆍᆞ・･‧⋅]/g, '·');
   s = s.replace(/[᠆‐‑⁃⁻₋﹣]/g, '-');
@@ -400,6 +408,73 @@ function parseKCI() {
   return verifyMetadata(rawMetadata);
 }
 
+function kciResultContainer(control) {
+  let node = control;
+  while (node && node !== document.body) {
+    if (node.querySelector?.('input[name="R_INDE_TITL"], input[name="a"]')) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function kciHiddenValue(container, name) {
+  return container?.querySelector?.(`input[name="${name}"]`)?.getAttribute('value') || '';
+}
+
+function stripKciLabel(value, label) {
+  return collapse(fixTypography(String(value || '').replace(new RegExp(`^\\s*${label}\\s*[:：]\\s*`), '')));
+}
+
+function splitKciResultAuthors(value) {
+  const clean = stripKciLabel(value, '저자')
+    .replace(/\s*외\s*\d+\s*명\s*$/g, '')
+    .replace(/\t+/g, ' ');
+  return clean.split(/\s*[|;,]\s*/).map(name => collapse(removeNonKoreanParen(name))).filter(Boolean);
+}
+
+function parseKciResultVolumeIssue(value) {
+  const text = stripKciLabel(value, '권\\(호\\)');
+  const match = text.match(/([^()\s]+)\s*\(([^)]+)\)/);
+  if (match) return { volume: match[1], issue: match[2] };
+  return { volume: text, issue: '' };
+}
+
+function parseKciResultPages(value) {
+  const text = stripKciLabel(value, '페이지').replace(/^pp\.?\s*/i, '');
+  const parts = text.split(/[~-]/).map(part => collapse(part)).filter(Boolean);
+  return {
+    page_first: parts[0] || '',
+    page_last: parts[1] || ''
+  };
+}
+
+function parseKciSearchResultMetadata(control) {
+  const container = kciResultContainer(control);
+  if (!container) return null;
+
+  const titleText = kciHiddenValue(container, 'R_INDE_TITL') || stripKciLabel(kciHiddenValue(container, 'a'), '논문명');
+  const { main: title_main, sub: title_sub } = splitTitle(fixTypography(titleText));
+  const { volume, issue } = parseKciResultVolumeIssue(kciHiddenValue(container, 'e'));
+  const pages = parseKciResultPages(kciHiddenValue(container, 'f'));
+  const pubDate = kciHiddenValue(container, 'R_PUBI_DT') || kciHiddenValue(container, 'g');
+  const rawMetadata = {
+    authors: splitKciResultAuthors(kciHiddenValue(container, 'b')),
+    title_main,
+    title_sub,
+    journal_name: kciHiddenValue(container, 'R_SERE_NM') || stripKciLabel(kciHiddenValue(container, 'd'), '학술지명'),
+    volume: kciHiddenValue(container, 'R_VOL') || volume,
+    issue: kciHiddenValue(container, 'R_ISSE') || issue,
+    publisher: kciHiddenValue(container, 'R_PUBI_INSI_NM') || stripKciLabel(kciHiddenValue(container, 'c'), '학회명'),
+    year: (String(pubDate).match(/(?:19|20)\d{2}/) || [''])[0],
+    page_first: kciHiddenValue(container, 'R_ST_PG') || pages.page_first,
+    page_last: kciHiddenValue(container, 'R_END_PG') || pages.page_last,
+    keywords: [],
+    abstract: ''
+  };
+
+  return verifyMetadata(rawMetadata);
+}
+
 //----- KISS 페이지 처리 함수: KISS 사이트 메타 태그와 DOM에서 메타데이터 추출 -----
 function parseKISS() {
   const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
@@ -537,6 +612,7 @@ function parseDBpia() {
       if (src.includes('master')) thesisType = '석사학위논문';
       else if (src.includes('doctor')) thesisType = '박사학위논문';
     }
+    let publisher = institute;
     if (thesisType) {
       publisher = `${institute} ${thesisType}`;
     }
@@ -832,6 +908,780 @@ function getMetadata() {
   return metadata;
 }
 
+// ----- PDF 파일명 자동 변경 -----
+
+function storageSyncGetForContent(query, callback) {
+  const area = storageApi?.sync ?? storageApi?.local;
+  if (!area) {
+    callback(query && typeof query === 'object' && !Array.isArray(query) ? { ...query } : {});
+    return;
+  }
+
+  if (globalThis.browser?.storage && area.get) {
+    area.get(query)
+      .then(callback)
+      .catch(() => callback(query && typeof query === 'object' && !Array.isArray(query) ? { ...query } : {}));
+    return;
+  }
+
+  area.get(query, items => callback(items || {}));
+}
+
+function storageSyncGetForContentAsync(query) {
+  return new Promise(resolve => {
+    storageSyncGetForContent(query, resolve);
+  });
+}
+
+function initPdfFilenameSetting() {
+  if (!fileNamingApi) return;
+  storageSyncGetForContent({ [fileNamingApi.PDF_FILENAME_ENABLED_KEY]: true }, items => {
+    pdfFilenameFeatureEnabled = items[fileNamingApi.PDF_FILENAME_ENABLED_KEY] !== false;
+  });
+
+  if (storageApi?.onChanged?.addListener) {
+    storageApi.onChanged.addListener((changes, areaName) => {
+      if ((areaName === 'sync' || areaName === 'local') && changes[fileNamingApi.PDF_FILENAME_ENABLED_KEY]) {
+        pdfFilenameFeatureEnabled = changes[fileNamingApi.PDF_FILENAME_ENABLED_KEY].newValue !== false;
+      }
+    });
+  }
+}
+
+function isPdfFilenameSupportedPage() {
+  return Boolean(fileNamingApi && fileNamingApi.isAllowedUrl(location.href));
+}
+
+function pdfNormalize(value) {
+  return fileNamingApi?.normalizeSpaces
+    ? fileNamingApi.normalizeSpaces(value)
+    : collapse(String(value || ''));
+}
+
+function safeClosest(target, selector) {
+  try {
+    return target?.closest ? target.closest(selector) : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function absolutizeUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw || /^javascript:/i.test(raw) || raw === '#') return '';
+  try {
+    return new URL(raw, location.href).href;
+  } catch (_error) {
+    return raw;
+  }
+}
+
+function controlText(control) {
+  if (!control) return '';
+  let text = [
+    control.textContent,
+    control.value,
+    control.getAttribute?.('title'),
+    control.getAttribute?.('alt'),
+    control.getAttribute?.('aria-label'),
+    control.getAttribute?.('download'),
+    control.getAttribute?.('class'),
+    control.getAttribute?.('id')
+  ].join(' ');
+
+  if (control.querySelectorAll) {
+    Array.from(control.querySelectorAll('img')).forEach(img => {
+      text += ' ' + [
+        img.getAttribute('alt'),
+        img.getAttribute('title'),
+        img.getAttribute('src')
+      ].join(' ');
+    });
+  }
+
+  return pdfNormalize(text);
+}
+
+function sourceText(control) {
+  if (!control?.getAttribute) return '';
+  return pdfNormalize([
+    control.getAttribute('href'),
+    control.getAttribute('onclick'),
+    control.getAttribute('data-url'),
+    control.getAttribute('data-href'),
+    control.getAttribute('data-file'),
+    control.getAttribute('data-filename'),
+    control.getAttribute('data-imgdownurl'),
+    control.getAttribute('data-oridownurl'),
+    control.getAttribute('download')
+  ].join(' '));
+}
+
+function currentNrichViewerImage() {
+  const rendered = document.querySelector('.viewer-container .viewer-canvas img[id], .viewer-canvas img[id], .viewer-image[id]');
+  const renderedId = rendered?.getAttribute?.('id') || '';
+  if (renderedId) {
+    const byDataIdx = Array.from(document.querySelectorAll('img[data-idx]'))
+      .find(img => img.getAttribute('data-idx') === renderedId);
+    if (byDataIdx) return byDataIdx;
+  }
+
+  const renderedSrc = rendered?.getAttribute?.('src') || '';
+  if (renderedSrc) {
+    return Array.from(document.querySelectorAll('img[data-imgdownurl], img[data-oridownurl]'))
+      .find(img => {
+        const src = img.getAttribute('src') || img.getAttribute('data-original') || img.getAttribute('data-src') || '';
+        return src && (src === renderedSrc || absolutizeUrl(src) === absolutizeUrl(renderedSrc));
+      }) || null;
+  }
+
+  return null;
+}
+
+function nrichViewerDownloadSource(control) {
+  const className = control?.getAttribute?.('class') || '';
+  if (!/\bviewer-download\b/i.test(className)) return '';
+  const image = currentNrichViewerImage();
+  if (!image?.getAttribute) return '';
+
+  if (/\bviewer-download-ori\b/i.test(className)) {
+    return image.getAttribute('data-oridownurl') || image.dataset?.oridownurl || '';
+  }
+  return image.getAttribute('data-imgdownurl') || image.dataset?.imgdownurl || '';
+}
+
+function downloadSourceText(control) {
+  return pdfNormalize(`${sourceText(control)} ${nrichViewerDownloadSource(control)}`);
+}
+
+function isLikelyDownloadControl(control) {
+  if (!control) return false;
+  const text = controlText(control);
+  const source = downloadSourceText(control);
+  const combined = `${text} ${source}`;
+  return /\.pdf(?:[?#]|$|\s)/i.test(combined) ||
+    /(?:PDF|원문|본문|다운로드|내려받기|파일|Full\s*Text|Download|View\s*PDF)/i.test(text) ||
+    /(?:pdf|download|down|file|fulltext|original|원문|다운로드|fncDown|KCI_FI|ciSereArtiOrteServHistIFrame|fnFile|fileDown|downloadFile|fnOriFileDownload|fnFileDownload)/i.test(source);
+}
+
+function isHeritageDownloadControl(control) {
+  const text = controlText(control);
+  const source = downloadSourceText(control);
+  const combined = `${text} ${source}`;
+  if (/바로보기|fnPdfViewer|fnSatisfaction2/i.test(combined)) return false;
+  return /다운로드|내려받기|fnOriFileDownload|fnFileDownload|includeFileDownLoad|download/i.test(combined);
+}
+
+function firstUrlFromJs(source) {
+  const text = String(source || '');
+  const direct = text.match(/https?:\/\/[^'")\s]+/i);
+  if (direct) return direct[0];
+  const quoted = text.match(/['"]([^'"]*(?:pdf|download|file|down|original|satisfactionPopup|fileDown)[^'"]*)['"]/i);
+  return quoted ? absolutizeUrl(quoted[1]) : '';
+}
+
+function splitJsArguments(argsText) {
+  const args = [];
+  let current = '';
+  let quote = '';
+  let escaped = false;
+  const text = String(argsText || '');
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      current += char;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === '\'' || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === ',') {
+      args.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+
+  args.push(current.trim());
+  return args.map(arg => arg.replace(/^['"]|['"]$/g, ''));
+}
+
+function jsCallArguments(source, functionName) {
+  const text = String(source || '');
+  const match = text.match(new RegExp(`${functionName}\\s*\\(([^)]*)\\)`, 'i'));
+  return match ? splitJsArguments(match[1]) : null;
+}
+
+function nrichMenuName() {
+  const path = location.pathname || '';
+  const href = location.href || '';
+  if (/\/kor\/mokgan/i.test(path)) return 'mokgan';
+  if (/\/kor\/remains/i.test(path)) return 'remains';
+  if (/\/kor\/originalUsr/i.test(path) || /[?&]menuIdx=1046\b/i.test(href)) return 'origin';
+  return '';
+}
+
+function nrichTableName() {
+  const menuName = nrichMenuName();
+  if (menuName === 'mokgan') return 'mokgan_file';
+  if (menuName === 'remains') return 'jungwon_file';
+  return 'report_attachfile';
+}
+
+function normalizeNrichDownloadArgs(source, context) {
+  const satisfactionArgs = jsCallArguments(source, 'fnSatisfaction');
+  if (satisfactionArgs) return satisfactionArgs;
+
+  const fileDownloadArgs = jsCallArguments(source, 'fnFileDownload');
+  if (fileDownloadArgs) {
+    return [
+      fileDownloadArgs[5] || context?.downloadUrl || '',
+      fileDownloadArgs[0] || '',
+      fileDownloadArgs[1] || '',
+      fileDownloadArgs[2] || '',
+      fileDownloadArgs[3] || '',
+      fileDownloadArgs[4] || ''
+    ];
+  }
+
+  const oriDownloadArgs = jsCallArguments(source, 'fnOriFileDownload');
+  if (oriDownloadArgs) {
+    return [
+      oriDownloadArgs[0] || context?.downloadUrl || '',
+      oriDownloadArgs[1] || '',
+      oriDownloadArgs[2] || '',
+      oriDownloadArgs[4] || '',
+      oriDownloadArgs[5] || '',
+      oriDownloadArgs[6] || ''
+    ];
+  }
+
+  return null;
+}
+
+function nrichPostBodyFromArgs(args) {
+  const fileIdx = args[1] || args[0] || '';
+  const menuIdx = args[2] || args[1] || '';
+  const fileType = args[3] || '';
+  const gubun = args[4] || '';
+  const filetype = args[5] || '';
+  const body = new URLSearchParams();
+  [
+    ['file_idx', fileIdx],
+    ['menuidx', menuIdx],
+    ['menuIdx', menuIdx],
+    ['file_type', fileType],
+    ['gubun', gubun],
+    ['filetype', filetype],
+    ['mcidx', fileIdx],
+    ['idx', fileIdx],
+    ['file_gubun', gubun],
+    ['a_number', fileIdx],
+    ['add_seq', fileIdx],
+    ['make_no', gubun],
+    ['filetype_cd', fileType],
+    ['table_nm', nrichTableName()],
+    ['title', document.title || '']
+  ].forEach(([key, value]) => body.set(key, value || ''));
+  return body;
+}
+
+function downloadRequestFromControl(control, context) {
+  const source = downloadSourceText(control);
+  const kciDownload = fileNamingApi?.getKciDownloadInfo?.(source, location.href);
+  if (kciDownload?.url) {
+    return {
+      url: kciDownload.url,
+      options: {
+        method: 'GET',
+        credentials: 'include'
+      }
+    };
+  }
+
+  const args = normalizeNrichDownloadArgs(source, context);
+
+  if (fileNamingApi?.isHeritageUrl(location.href) && args && args.length >= 3) {
+    return {
+      url: absolutizeUrl(args[0] || context?.downloadUrl || ''),
+      options: {
+        method: 'POST',
+        credentials: 'include',
+        body: nrichPostBodyFromArgs(args)
+      }
+    };
+  }
+
+  if ((context?.directDownload || context?.report?.directDownload) && context?.downloadUrl) {
+    return {
+      url: context.downloadUrl,
+      options: {
+        method: 'GET',
+        credentials: 'include'
+      }
+    };
+  }
+
+  return null;
+}
+
+function downloadUrlFromControl(control) {
+  if (!control?.getAttribute) return '';
+  const href = control.getAttribute('href') || '';
+  const dataUrl = control.getAttribute('data-url') ||
+    control.getAttribute('data-href') ||
+    control.getAttribute('data-file') || '';
+  const direct = absolutizeUrl(dataUrl || href);
+  if (direct) return direct;
+  const kciDownload = fileNamingApi?.getKciDownloadInfo?.(`${href.startsWith('javascript:') ? href : ''} ${control.getAttribute('onclick') || ''}`, location.href);
+  if (kciDownload?.url) return kciDownload.url;
+  return firstUrlFromJs(`${href.startsWith('javascript:') ? href : ''} ${control.getAttribute('onclick') || ''} ${nrichViewerDownloadSource(control)}`);
+}
+
+function isDirectDownloadControl(control, downloadUrl) {
+  if (!downloadUrl || !control?.getAttribute) return false;
+  const href = control.getAttribute('href') || '';
+  const dataUrl = control.getAttribute('data-url') ||
+    control.getAttribute('data-href') ||
+    control.getAttribute('data-file') || '';
+  const source = sourceText(control);
+  if (/fnOriFileDownload|fnFileDownload|fnFileDown|fnSatisfaction|javascript:/i.test(`${href} ${source}`)) {
+    return false;
+  }
+  return Boolean(dataUrl || (href && !/^javascript:/i.test(href)));
+}
+
+function originalFilenameFromControl(control, downloadUrl) {
+  if (!control?.getAttribute) return fileNamingApi.filenameFromUrl(downloadUrl);
+  const direct = control.getAttribute('download') ||
+    control.getAttribute('data-filename') ||
+    control.getAttribute('data-file-name') ||
+    control.getAttribute('title') ||
+    '';
+  const directPdf = String(direct).match(/([^\\/:"?*<>|]+\.pdf)\b/i);
+  if (directPdf) return directPdf[1];
+  const textPdf = controlText(control).match(/([^\\/:"?*<>|]+\.pdf)\b/i);
+  if (textPdf) return textPdf[1];
+  return fileNamingApi.filenameFromUrl(downloadUrl);
+}
+
+function nearbyContainer(control) {
+  if (!control?.closest) return control;
+  const selectors = [
+    '.info-file li',
+    '.info-file',
+    '.detail_tech',
+    '.detail_view',
+    '.item',
+    '.listCont',
+    '.cont',
+    '.box',
+    '.card',
+    'article',
+    'tr',
+    'dl',
+    'li',
+    'section',
+    '.srchResultListW',
+    '.search-result',
+    '.result-list',
+    '.result',
+    "[class*='result']"
+  ];
+
+  for (const selector of selectors) {
+    const found = safeClosest(control, selector);
+    if (found && found.textContent && found.textContent.length >= Math.max((control.textContent || '').length + 20, 40)) {
+      return found;
+    }
+  }
+  return control;
+}
+
+function valueAfterLabelElement(labelElement) {
+  if (!labelElement) return '';
+  let sibling = labelElement.nextElementSibling;
+  while (sibling) {
+    if (/^(dd|td)$/i.test(sibling.tagName)) return pdfNormalize(sibling.textContent);
+    sibling = sibling.nextElementSibling;
+  }
+  return '';
+}
+
+function extractReportFacts() {
+  const facts = {};
+  const labelMap = {
+    발행년도: 'year',
+    발행연도: 'year',
+    제작년도: 'year',
+    발간년도: 'year',
+    발간연도: 'year',
+    저작권자: 'agency',
+    발행기관: 'agency',
+    발간기관: 'agency',
+    조사기관: 'agency',
+    생산자: 'agency',
+    보고서명: 'reportTitle'
+  };
+
+  Array.from(document.querySelectorAll('dt, th')).forEach(labelElement => {
+    const label = pdfNormalize(labelElement.textContent).replace(/[:：]\s*$/g, '');
+    const key = labelMap[label];
+    if (!key) return;
+    const value = valueAfterLabelElement(labelElement);
+    if (!value) return;
+    facts[key] = value;
+  });
+
+  const text = pdfNormalize(document.body?.innerText || document.body?.textContent || '');
+  if (!facts.year) {
+    const yearMatch = text.match(/(?:발행년도|발행연도|제작년도|발간년도|발간연도)\s*[:：]?\s*((?:19|20)\d{2})\s*년?/);
+    if (yearMatch) facts.year = yearMatch[1];
+  }
+  if (!facts.agency) {
+    const agencyMatch = text.match(/(?:저작권자|발행기관|발간기관|조사기관|생산자)\s*[:：]?\s*([^|•\n\r]+?)(?=\s+(?:발행년도|발행연도|형태사항|초록|목차|보고서|첨부파일|등록일|조회수)\b|$)/);
+    if (agencyMatch) facts.agency = pdfNormalize(agencyMatch[1]);
+  }
+
+  return facts;
+}
+
+function cleanupReportTitleCandidate(value) {
+  return pdfNormalize(String(value || '')
+    .replace(/\.pdf$/i, '')
+    .replace(/\s*\|\s*국가유산.*$/g, '')
+    .replace(/\s*-\s*(국가유산청|국가유산 지식이음|국립문화유산연구원).*$/g, '')
+    .replace(/^(발굴조사 보고서|보고서|발간자료|원문정보)\s*$/g, ''));
+}
+
+function extractReportTitle() {
+  const facts = extractReportFacts();
+  if (facts.reportTitle) return cleanupReportTitleCandidate(facts.reportTitle);
+
+  const selectors = [
+    '.detail_tech h3.tit',
+    '.detail_view h3.tit',
+    'main h1',
+    'main h2',
+    'main h3',
+    '#contents h1',
+    '#contents h2',
+    '#contents h3',
+    '#content h1',
+    '#content h2',
+    '#content h3',
+    '.detail h3',
+    '.view h3',
+    'h1',
+    'h2',
+    'h3'
+  ];
+  const rejectExact = new Set(['국가유산 간행물', '보고서', '발굴조사 보고서', '발굴조사보고서', '행정정보', '발간자료', '본문', '연구성과', '국가유산 지식이음']);
+
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    const title = cleanupReportTitleCandidate(el?.textContent || '');
+    if (title && !rejectExact.has(title) && !/조사\s*시도.*제출\s*년도/.test(title)) {
+      return title;
+    }
+  }
+
+  return cleanupReportTitleCandidate(document.title || '');
+}
+
+function reportMetadataFromPage() {
+  const facts = extractReportFacts();
+  const reportTitle = extractReportTitle();
+  return {
+    reportTitle,
+    year: (pdfNormalize(facts.year).match(/(?:19|20)\d{2}/) || [''])[0],
+    agency: pdfNormalize(facts.agency),
+    pageUrl: location.href
+  };
+}
+
+function reportFileTitleFromControl(control, downloadUrl) {
+  const container = nearbyContainer(control);
+  const text = pdfNormalize(container?.textContent || controlText(control));
+  const pdfMatch = text.match(/([^()\n\r]+?\.pdf)\b/i);
+  if (pdfMatch) return pdfNormalize(pdfMatch[1]);
+  return originalFilenameFromControl(control, downloadUrl);
+}
+
+function downloadControlKey(control) {
+  const url = downloadUrlFromControl(control);
+  const source = downloadSourceText(control);
+  const text = controlText(control)
+    .replace(/\b\d+(?:\.\d+)?\s*(?:KB|MB|GB)\b/gi, '')
+    .replace(/\b(?:PDF|Download|Full\s*Text)\b/gi, '')
+    .replace(/(?:다운로드|내려받기|원문|파일|바로보기)/g, '')
+    .trim();
+  return `${url || source}|${text}`;
+}
+
+function downloadControls() {
+  const seen = new Set();
+  return Array.from(document.querySelectorAll('a, button, input, [role="button"], [onclick], [data-url], [data-href], [data-file], [data-imgdownurl], [data-oridownurl]'))
+    .filter(control => {
+      if (!isLikelyDownloadControl(control)) return false;
+      if (fileNamingApi?.isHeritageUrl(location.href)) return isHeritageDownloadControl(control);
+      return true;
+    })
+    .filter(control => {
+      const key = downloadControlKey(control);
+      if (!key || key === '|') return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildAcademicContext(control) {
+  let metadata;
+  try {
+    metadata = getMetadata();
+  } catch (_error) {
+    metadata = null;
+  }
+
+  if (!metadata || Object.values(metadata).every(v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0))) {
+    metadata = parseKciSearchResultMetadata(control);
+  }
+
+  if (!metadata || Object.values(metadata).every(v => v === undefined || v === '' || (Array.isArray(v) && v.length === 0))) {
+    return null;
+  }
+
+  const downloadUrl = downloadUrlFromControl(control);
+  const directDownload = isDirectDownloadControl(control, downloadUrl);
+  return {
+    kind: 'academic',
+    metadata,
+    pageUrl: location.href,
+    downloadUrl,
+    directDownload,
+    originalFilename: originalFilenameFromControl(control, downloadUrl),
+    capturedAt: Date.now()
+  };
+}
+
+function buildReportContext(control, allControls = downloadControls()) {
+  const report = reportMetadataFromPage();
+  const downloadUrl = downloadUrlFromControl(control);
+  const directDownload = isDirectDownloadControl(control, downloadUrl);
+  const originalFilename = originalFilenameFromControl(control, downloadUrl);
+  const fileTitle = reportFileTitleFromControl(control, downloadUrl);
+  const optionIndex = Math.max(0, allControls.indexOf(control));
+  const multipleFiles = allControls.length > 1;
+  const attachmentTitle = fileNamingApi.deriveAttachmentTitle(report.reportTitle, fileTitle, originalFilename);
+  const reportContext = {
+    ...report,
+    downloadUrl,
+    directDownload,
+    originalFilename,
+    fileTitle,
+    attachmentTitle,
+    multipleFiles,
+    sequenceNumber: multipleFiles && !attachmentTitle ? String(optionIndex + 1) : ''
+  };
+
+  return {
+    kind: 'report',
+    report: reportContext,
+    pageUrl: location.href,
+    downloadUrl,
+    directDownload,
+    originalFilename,
+    capturedAt: Date.now()
+  };
+}
+
+function buildDownloadContext(control, allControls = downloadControls()) {
+  if (!fileNamingApi?.isAllowedUrl(location.href)) return null;
+  if (fileNamingApi.isHeritageUrl(location.href)) return buildReportContext(control, allControls);
+  return buildAcademicContext(control);
+}
+
+async function filenameForContext(context) {
+  const settings = await storageSyncGetForContentAsync(null);
+  return fileNamingApi.renderFilename(context, settings);
+}
+
+function sendDownloadContext(context) {
+  if (!context || !runtimeApi?.sendMessage) return;
+  try {
+    const message = {
+      type: fileNamingApi.DOWNLOAD_CONTEXT_MESSAGE,
+      context
+    };
+    if (globalThis.browser?.runtime?.sendMessage) {
+      globalThis.browser.runtime.sendMessage(message).catch(() => {});
+      return;
+    }
+    runtimeApi.sendMessage(message, () => {
+      try {
+        void globalThis.chrome?.runtime?.lastError;
+      } catch (_error) {}
+    });
+  } catch (_error) {}
+}
+
+async function handlePossibleDownload(event) {
+  if (!pdfFilenameFeatureEnabled || !isPdfFilenameSupportedPage()) return;
+  const control = safeClosest(event.target, 'a, button, input, [role="button"], [tabindex], [onclick], [data-url], [data-href], [data-file], [data-imgdownurl], [data-oridownurl], [class*="down"], [class*="file"], [class*="full"]');
+  if (!isLikelyDownloadControl(control)) return;
+  if (forcedDownloadControls.has(control)) {
+    forcedDownloadControls.delete(control);
+    return;
+  }
+
+  const now = Date.now();
+  const controls = downloadControls();
+  const context = buildDownloadContext(control, controls);
+  if (now - lastDownloadContextSentAt >= DOWNLOAD_CONTEXT_DEBOUNCE_MS) {
+    lastDownloadContextSentAt = now;
+    sendDownloadContext(context);
+  }
+
+  if (event.type === 'pointerdown' || event.type === 'change') return;
+
+  const request = downloadRequestFromControl(control, context);
+  if (!request) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+
+  const filename = await filenameForContext(context);
+  if (await downloadRequestWithFilename(request, filename)) return;
+
+  forcedDownloadControls.add(control);
+  control.click();
+}
+
+function optionLabelFromContext(context, index) {
+  if (context.kind === 'report') {
+    const report = context.report || {};
+    return pdfNormalize(report.fileTitle || report.attachmentTitle || report.originalFilename || `PDF ${index + 1}`);
+  }
+  return pdfNormalize(context.originalFilename || `PDF ${index + 1}`);
+}
+
+function getDownloadOptions() {
+  if (!pdfFilenameFeatureEnabled || !isPdfFilenameSupportedPage()) return [];
+  const controls = downloadControls();
+  return controls
+    .map((control, index) => {
+      const context = buildDownloadContext(control, controls);
+      if (!context) return null;
+      return {
+        optionId: String(index),
+        label: optionLabelFromContext(context, index),
+        url: context.downloadUrl || '',
+        directDownload: Boolean(context.directDownload || context.report?.directDownload),
+        kind: context.kind,
+        context
+      };
+    })
+    .filter(Boolean);
+}
+
+async function downloadRequestWithFilename(request, filename) {
+  if (!request?.url || /^javascript:/i.test(request.url)) return false;
+  try {
+    const response = await fetch(request.url, request.options || { credentials: 'include' });
+    if (!response.ok) return false;
+    const contentType = response.headers.get('content-type') || '';
+    if (/text\/html|application\/json/i.test(contentType)) return false;
+    const blob = await response.blob();
+    if (!blob.size) return false;
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function downloadDirectUrlWithFilename(url, filename) {
+  return downloadRequestWithFilename({
+    url,
+    options: {
+      method: 'GET',
+      credentials: 'include'
+    }
+  }, filename);
+}
+
+async function startNamedDownload(optionId, filename) {
+  const controls = downloadControls();
+  const index = Number(optionId);
+  const control = controls[index];
+  if (!control) return { success: false, error: '다운로드 후보를 찾지 못했습니다' };
+
+  const context = buildDownloadContext(control, controls);
+  sendDownloadContext(context);
+  const request = downloadRequestFromControl(control, context);
+
+  if (request && await downloadRequestWithFilename(request, filename)) {
+    return { success: true, method: 'fetch' };
+  }
+
+  if ((context?.directDownload || context?.report?.directDownload) &&
+      context?.downloadUrl &&
+      await downloadDirectUrlWithFilename(context.downloadUrl, filename)) {
+    return { success: true, method: 'fetch' };
+  }
+
+  const href = control.getAttribute?.('href');
+  if ((context?.directDownload || context?.report?.directDownload) && context?.downloadUrl && href && !/^javascript:/i.test(href)) {
+    const a = document.createElement('a');
+    a.href = context.downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return { success: true, method: 'anchor' };
+  }
+
+  control.click();
+  return { success: true, method: 'click' };
+}
+
+function installDownloadContextListeners() {
+  if (!fileNamingApi) return;
+  initPdfFilenameSetting();
+  document.addEventListener('pointerdown', handlePossibleDownload, true);
+  document.addEventListener('click', handlePossibleDownload, true);
+  document.addEventListener('change', handlePossibleDownload, true);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') handlePossibleDownload(event);
+  }, true);
+}
+
 // popup.js로부터 메시지를 listen
 function getPageInfo() {
   const metadata   = getMetadata();
@@ -849,15 +1699,35 @@ function getPageInfo() {
   return { metadata, academicDB, url, timestamp, timestampId };
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'GET_PAGE_INFO') {
-    try {
-      sendResponse({ success: true, pageInfo: getPageInfo() });
-    } catch (err) {
-      sendResponse({ success: false, error: err.message });
+if (runtimeApi && !globalThis.__SICKLE_CITE_MESSAGE_LISTENER__) {
+  globalThis.__SICKLE_CITE_MESSAGE_LISTENER__ = true;
+
+  runtimeApi.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'GET_PAGE_INFO') {
+      try {
+        sendResponse({ success: true, pageInfo: getPageInfo() });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return true;
     }
+    if (fileNamingApi && request.action === fileNamingApi.GET_DOWNLOAD_OPTIONS_ACTION) {
+      try {
+        sendResponse({ success: true, options: getDownloadOptions(), enabled: pdfFilenameFeatureEnabled });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return true;
+    }
+    if (fileNamingApi && request.action === fileNamingApi.START_NAMED_DOWNLOAD_ACTION) {
+      startNamedDownload(request.optionId, request.filename)
+        .then(result => sendResponse(result))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+    // sendResponse를 위해 메시지 채널을 열린 상태로 유지
     return true;
-  }
-  // sendResponse를 위해 메시지 채널을 열린 상태로 유지
-  return true;
-});
+  });
+}
+
+installDownloadContextListeners();

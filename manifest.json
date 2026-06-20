@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sickle-Cite",
-  "version": "1.7.4",
+  "version": "1.7.7",
   "icons": {
     "128": "icons/icon128.png"
   },
@@ -10,24 +10,14 @@
     "storage",
     "activeTab",
     "scripting",
-    "commands"
+    "downloads"
   ],
-  "web_accessible_resources": [
-  {
-    "resources": ["xlsx.full.min.js"],
-    "matches": ["<all_urls>"]
-  }
-  ],
-  "background": {
-    "service_worker": "service-worker.js"
-  },
-  "commands":{
-    "open-extension-popup": {
+  "commands": {
+    "_execute_action": {
       "suggested_key": {
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
-      },
-      "description": "현재 페이지에서 팝업 창 열기 = 현재 페이지에서 논문 서지사항 추출하기"
+      }
     }
   },
   "action": {
@@ -36,13 +26,54 @@
       "128": "icons/icon128.png"
     }
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "host_permissions": [
-    "https://*.riss.kr/search/detail/DetailView.do*",
-    "https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView*",
-    "https://*.kiss.kstudy.com/Detail*/Ar*",
-    "https://*.dbpia.com/journal/articleDetail*",
-    "https://*.dbpia.com/journal/detail*",
-    "https://*.earticle.net/Article/*",
-    "https://*.scholar.kyobobook.co.kr/article/detail/*"
+    "https://*.riss.kr/*",
+    "https://*.kci.go.kr/*",
+    "https://*.kiss.kstudy.com/*",
+    "https://*.dbpia.com/*",
+    "https://*.dbpia.co.kr/*",
+    "https://*.earticle.net/*",
+    "https://*.scholar.kyobobook.co.kr/*",
+    "https://*.koreascience.or.kr/*",
+    "https://scienceon.kisti.re.kr/*",
+    "https://*.krm.or.kr/*",
+    "https://*.dcollection.net/*",
+    "https://history.seoul.go.kr/*",
+    "https://*.heritage.go.kr/*",
+    "https://*.cha.go.kr/*",
+    "https://*.khs.go.kr/*",
+    "https://*.e-minwon.go.kr/*",
+    "https://*.nrich.go.kr/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.riss.kr/*",
+        "https://*.kci.go.kr/*",
+        "https://*.kiss.kstudy.com/*",
+        "https://*.dbpia.com/*",
+        "https://*.dbpia.co.kr/*",
+        "https://*.earticle.net/*",
+        "https://*.scholar.kyobobook.co.kr/*",
+        "https://*.koreascience.or.kr/*",
+        "https://scienceon.kisti.re.kr/*",
+        "https://*.krm.or.kr/*",
+        "https://*.dcollection.net/*",
+        "https://history.seoul.go.kr/*",
+        "https://*.heritage.go.kr/*",
+        "https://*.cha.go.kr/*",
+        "https://*.khs.go.kr/*",
+        "https://*.e-minwon.go.kr/*",
+        "https://*.nrich.go.kr/*"
+      ],
+      "js": [
+        "filename_tools.js",
+        "content_script.js"
+      ],
+      "run_at": "document_idle"
+    }
   ]
 }
