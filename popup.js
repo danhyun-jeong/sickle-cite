@@ -957,7 +957,7 @@ let historyById = new Map(); // 현재 표에 그려진 항목 (id 문자열 →
 
 // 내역이 많아도 팝업이 느려지지 않도록 최근 항목부터 일정 개수만 표에 그린다.
 // (검색은 항상 저장된 전체 내역을 대상으로 하고, 그 결과를 같은 방식으로 나눠 보여줌)
-const HISTORY_PAGE_SIZE = 100;
+const HISTORY_PAGE_SIZE = 500;
 let historyLimit = HISTORY_PAGE_SIZE;
 
 // 같은 논문 중 가장 이른 것만 남김
