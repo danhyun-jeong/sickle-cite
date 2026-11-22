@@ -12,12 +12,6 @@
     "scripting",
     "commands"
   ],
-  "web_accessible_resources": [
-  {
-    "resources": ["xlsx.full.min.js"],
-    "matches": ["<all_urls>"]
-  }
-  ],
   "background": {
     "service_worker": "service-worker.js"
   },

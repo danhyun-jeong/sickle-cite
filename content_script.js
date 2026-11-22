@@ -318,7 +318,8 @@ function parseRISS() {
       // 4. 조합
       return `${institute} ${department} ${degreeType}`.trim();
     }
-    const thesisInfo = formatThesisInfo(tmp.thesisInfoRaw)
+    // '학위논문사항' 항목이 없는 페이지에서도 오류 없이 빈 값으로 처리
+    const thesisInfo = formatThesisInfo(tmp.thesisInfoRaw ?? '');
     // 최종 메타데이터 구성
     const rawMetadata = {
       authors: tmp.authors,

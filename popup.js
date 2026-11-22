@@ -113,7 +113,8 @@ if (copyMetadataBtn) {
 // 단축키(Ctrl+Shift+Y 또는 Cmd+Shift+Y) 이벤트 리스너
 document.addEventListener('keydown', (e) => {
   // Ctrl+Shift+Y 또는 Cmd+Shift+Y (Mac)
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'y') {
+  // e.key는 Shift를 누르면 'Y'(대문자), 한글 입력 상태에선 'ㅛ'가 되므로 물리 키 위치(e.code)로 판별
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyY') {
     e.preventDefault();
     copyYamlToClipboard();
   }
@@ -388,7 +389,9 @@ function applyEarliestDuplicate(pageInfo) {
 
 // Windows인 경우에만 스크롤바 설정을 적용하는 함수
 function setScrollbarWin() {
-  if (navigator.platform.startsWith('Win')) {
+  // navigator.platform은 폐기 예정(deprecated) → userAgentData 우선, 미지원 브라우저는 platform으로 대체
+  const platform = navigator.userAgentData?.platform ?? navigator.platform ?? '';
+  if (platform.startsWith('Win')) {
     const scrollTargets = [
       '#tab1 .left-pane .metadata-container',
       '#tab1 .right-pane .citation-input',
