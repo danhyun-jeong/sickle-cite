@@ -149,70 +149,74 @@ function verifyMetadata(raw) {
 
 // ----- RISS 페이지 처리 함수: RISS 사이트의 DOM에서 메타데이터 추출 -----
 function parseRISS() {
-  // 문서의 <title> 태그를 확인 (2025. 09. 기준 레거시)
+  // 학술지논문/학위논문 판별: <title> 태그(2025. 09. 기준 레거시) 또는 상단 위치 표시(.locationW)
   const pageTitle = document.title || '';
-  // "국내학술지" 링크가 있는지 확인
-  const isArticle = document.querySelector('.locationW')?.textContent?.includes('국내학술논문');
-  const isThesis = document.querySelector('.locationW')?.textContent?.includes('학위논문');
-  // title에 "학술지논문"이 포함되어 있거나 국내학술논문 링크가 있는지 판별
-  if (pageTitle.includes('학술지논문') || isArticle) {
-    console.log('학술지논문으로 확인됨');
-    // 1. 서지사항 리스트 수집: .infoDetailL ul li 항목
-    const items = document.querySelectorAll('#thesisInfoDiv .infoDetailL ul li');
-    if (!items.length) return;
-    const tmp = {};
-    // 2. 각 li 요소에서 레이블과 콘텐츠 분리
-    items.forEach(li => {
-      const label = collapse(li.querySelector('span.strong')?.textContent || '');
-      let content = li.querySelector('span.strong')
-        ? li.textContent.replace(li.querySelector('span.strong').textContent, '')
-        : li.textContent;
-      content = fixTypography(content);
-      switch (label) {
-        //   - 저자
-        case '저자':
-          tmp.authors = Array.from(li.querySelectorAll('a')).map(a => collapse(removeNonKoreanParen(fixTypography(a.textContent))));
-          break;
-        //   - 발행기관
-        case '발행기관': tmp.publisher = collapse(removeNonKoreanParen(fixTypography(content))); break;
-        //   - 학술지명
-        case '학술지명': case '학술지':
-          tmp.journal_name = collapse(removeNonKoreanParen(fixTypography(li.querySelector('a')?.textContent || content)));
-          break;
-        //   - 권호사항: Vol. 및 No. 형식에서 volume과 issue 추출
-        case '권호사항':
-          let volMatch = content.match(/Vol\. *(\d+)/i);
-          tmp.volume = volMatch ? volMatch[1] : '';
-          // No.- 인 경우 빈 문자열 유지
-          let issueMatch = content.match(/No\. *(\d+)/i);
-          tmp.issue = (issueMatch && issueMatch[1] !== '-') ? issueMatch[1] : '';
-          break;
-        //   - 발행연도: 4자리 숫자로 연도 추출
-        case '발행연도': tmp.year = (content.match(/\d{4}/)||[''])[0]; break;
-        //   - 주제어: 키워드 리스트 분리 및 필터링
-        case '주제어':
-          tmp.keywords = collapse(content).split(/[;；,]/).map(s => fixTypography(s)).filter(s => /[가-힣]/.test(s) || /^[A-Z]{2,}$/.test(s));
-          break;
-        //   - 수록면: 페이지 범위(first-last) 추출
-        case '수록면':
-          const pg = content.match(/(\d+)-(\d+)/);
-          if (pg) { tmp.page_first = pg[1]; tmp.page_last = pg[2]; }
-          break;
-      }
-    });
-    // 3. 국문 초록 추출: '국문 초록' 레이블 위치 기준으로 텍스트 노드 수집
-    const abstractTitleP = Array.from(document.querySelectorAll('p.title')).find(p => p.textContent.includes('국문 초록'));
-    if (abstractTitleP) {
-      const abstractDiv = abstractTitleP.parentElement.querySelector('div.text.off');
-      if (abstractDiv) {
-        const paras = Array.from(abstractDiv.querySelectorAll('p')).map(p => fixTypography(p.textContent));
-        tmp.abstract = collapse(paras.join('\n\n'));
+  const breadcrumb = document.querySelector('.locationW')?.textContent ?? '';
+  const isArticle = pageTitle.includes('학술지논문') || breadcrumb.includes('국내학술논문');
+  const isThesis = !isArticle && (pageTitle.includes('학위논문') || breadcrumb.includes('학위논문'));
+  if (!isArticle && !isThesis) {
+    console.error('학술지논문/학위논문 여부를 확인할 수 없습니다.');
+    return {};
+  }
+  console.log(isArticle ? '학술지논문으로 확인됨' : '학위논문으로 확인됨');
+
+  // 1. 서지사항 리스트 수집: .infoDetailL ul li 항목
+  const items = document.querySelectorAll('#thesisInfoDiv .infoDetailL ul li');
+  if (!items.length) return;
+  const tmp = {};
+  // 2. 각 li 요소에서 레이블과 콘텐츠 분리
+  items.forEach(li => {
+    const labelEl = li.querySelector('span.strong');
+    const label = collapse(labelEl?.textContent || '');
+    const content = fixTypography(labelEl ? li.textContent.replace(labelEl.textContent, '') : li.textContent);
+    switch (label) {
+      case '저자':
+        tmp.authors = Array.from(li.querySelectorAll('a')).map(a => collapse(removeNonKoreanParen(fixTypography(a.textContent))));
+        break;
+      case '발행기관':
+        tmp.publisher = collapse(removeNonKoreanParen(fixTypography(content)));
+        break;
+      // 학위논문사항: 전체를 문자열로 보관했다가 아래 formatThesisInfo로 가공
+      case '학위논문사항':
+        tmp.thesisInfoRaw = collapse(removeNonKoreanParen(fixTypography(content)));
+        break;
+      case '학술지명': case '학술지':
+        tmp.journal_name = collapse(removeNonKoreanParen(fixTypography(li.querySelector('a')?.textContent || content)));
+        break;
+      // 권호사항: Vol. 및 No. 형식에서 volume과 issue 추출 (No.- 인 경우 빈 문자열)
+      case '권호사항':
+        tmp.volume = content.match(/Vol\. *(\d+)/i)?.[1] ?? '';
+        tmp.issue = content.match(/No\. *(\d+)/i)?.[1] ?? '';
+        break;
+      // 발행연도: 4자리 숫자로 연도 추출
+      case '발행연도':
+        tmp.year = content.match(/\d{4}/)?.[0] ?? '';
+        break;
+      // 주제어: 키워드 리스트 분리 및 필터링
+      case '주제어':
+        tmp.keywords = collapse(content).split(/[;；,]/).map(s => fixTypography(s)).filter(s => /[가-힣]/.test(s) || /^[A-Z]{2,}$/.test(s));
+        break;
+      // 수록면: 페이지 범위(first-last) 추출
+      case '수록면': {
+        const pg = content.match(/(\d+)-(\d+)/);
+        if (pg) { tmp.page_first = pg[1]; tmp.page_last = pg[2]; }
+        break;
       }
     }
-    // 4. 제목 분리: rawTitle을 splitTitle 함수로 처리
-    const rawTitle = document.querySelector('#thesisInfoDiv .title')?.textContent || '';
-    const {main, sub} = splitTitle(fixTypography(rawTitle.split('=')[0]));
-    const rawMetadata = {
+  });
+  // 3. 국문 초록 추출: '국문 초록' 레이블 위치 기준으로 텍스트 노드 수집
+  const abstractTitleP = Array.from(document.querySelectorAll('p.title')).find(p => p.textContent.includes('국문 초록'));
+  const abstractDiv = abstractTitleP?.parentElement.querySelector('div.text.off');
+  if (abstractDiv) {
+    const paras = Array.from(abstractDiv.querySelectorAll('p')).map(p => fixTypography(p.textContent));
+    tmp.abstract = collapse(paras.join('\n\n'));
+  }
+  // 4. 제목 분리: rawTitle을 splitTitle 함수로 처리
+  const rawTitle = document.querySelector('#thesisInfoDiv .title')?.textContent || '';
+  const { main, sub } = splitTitle(fixTypography(rawTitle.split('=')[0]));
+
+  if (isArticle) {
+    return verifyMetadata({
       authors: tmp.authors,
       title_main: main,
       title_sub: sub,
@@ -225,123 +229,54 @@ function parseRISS() {
       page_last: tmp.page_last,
       keywords: tmp.keywords,
       abstract: tmp.abstract
-    };
-    return verifyMetadata(rawMetadata);
-  }
-  // title에 "학위논문"을 포함하고 있을 경우 또는 학위논문 링크가 있는지 판별
-  if (pageTitle.includes('학위논문') || isThesis) {
-    console.log('학위논문으로 확인됨');
-    // 1. 서지사항 리스트 수집: .infoDetailL ul li 항목
-    const items = document.querySelectorAll('#thesisInfoDiv .infoDetailL ul li');
-    if (!items.length) return;
-    const tmp = {};
-    // 2. 각 li 요소에서 레이블과 콘텐츠 분리
-    items.forEach(li => {
-      const label = collapse(li.querySelector('span.strong')?.textContent || '');
-      let content = li.querySelector('span.strong')
-        ? li.textContent.replace(li.querySelector('span.strong').textContent, '')
-        : li.textContent;
-      content = fixTypography(content);
-      switch (label) {
-        //   - 저자
-        case '저자':
-          tmp.authors = Array.from(li.querySelectorAll('a')).map(a => collapse(removeNonKoreanParen(fixTypography(a.textContent))));
-          break;
-        //   - 학위논문사항 전체부분을 스트링으로
-        case '학위논문사항': tmp.thesisInfoRaw = collapse(removeNonKoreanParen(fixTypography(content))); break;
-        //   - 학술지명
-        case '학술지명': case '학술지':
-          tmp.journal_name = collapse(removeNonKoreanParen(fixTypography(li.querySelector('a')?.textContent || content)));
-          break;
-        //   - 권호사항: Vol. 및 No. 형식에서 volume과 issue 추출
-        case '권호사항':
-          let volMatch = content.match(/Vol\. *(\d+)/i);
-          tmp.volume = volMatch ? volMatch[1] : '';
-          // No.- 인 경우 빈 문자열 유지
-          let issueMatch = content.match(/No\. *(\d+)/i);
-          tmp.issue = (issueMatch && issueMatch[1] !== '-') ? issueMatch[1] : '';
-          break;
-        //   - 발행연도: 4자리 숫자로 연도 추출
-        case '발행연도': tmp.year = (content.match(/\d{4}/)||[''])[0]; break;
-        //   - 주제어: 키워드 리스트 분리 및 필터링
-        case '주제어':
-          tmp.keywords = collapse(content).split(/[;；,]/).map(s => fixTypography(s)).filter(s => /[가-힣]/.test(s) || /^[A-Z]{2,}$/.test(s));
-          break;
-        //   - 수록면: 페이지 범위(first-last) 추출
-        case '수록면':
-          const pg = content.match(/(\d+)-(\d+)/);
-          if (pg) { tmp.page_first = pg[1]; tmp.page_last = pg[2]; }
-          break;
-      }
     });
-    // 3. 국문 초록 추출: '국문 초록' 레이블 위치 기준으로 텍스트 노드 수집
-    const krTitleP = Array.from(document.querySelectorAll('p.title')).find(p => p.textContent.includes('국문 초록'));
-    if (krTitleP) {
-      const divText = krTitleP.parentElement.querySelector('div.text.off');
-      if (divText) {
-        const paras = Array.from(divText.querySelectorAll('p')).map(p => fixTypography(p.textContent));
-        tmp.abstract = collapse(paras.join('\n\n'));
+  }
+
+  // 학위논문: '학위논문(박사) -- 연세대학교 대학원, 국어국문학과 …' → '연세대학교 국어국문학과 박사학위논문'
+  function formatThesisInfo(thesisInfo) {
+    // 1. "--"를 기준으로 앞/뒤 분리
+    const [degreePart = '', restPart = ''] = thesisInfo.split('--').map(s => s.trim());
+    // 1-1. degreePart에서 괄호 안의 학위 종류 추출 (괄호가 없으면 원본 앞부분 그대로)
+    const degreeLabel = degreePart.match(/\(([^)]+)\)/)?.[1] ?? '';
+    const degreeType = degreeLabel
+      ? `${degreeLabel}학위논문`
+      : degreePart.replace(/\s*\(.*\)\s*/, '');
+    // 2. restPart에서 institute와 department 추출
+    const restFields = restPart.split(',').map(s => collapse(s));
+    let institute = restFields[0] || '';
+    // 2-1. '대학교 대학원' 처리: 공백 앞뒤로 세분화
+    if (institute.includes(' ')) {
+      const [pre, post] = institute.split(' ');
+      if (pre.includes('대학교') && (post === '대학원' || post === '일반대학원')) {
+        institute = pre;
       }
     }
-    // 4. 제목 분리: rawTitle을 splitTitle 함수로 처리
-    const rawTitle = document.querySelector('#thesisInfoDiv .title')?.textContent || '';
-    const {main, sub} = splitTitle(fixTypography(rawTitle.split('=')[0]));
-    // 5. 
-    function formatThesisInfo(thesisInfo) {
-      // 1. "--"를 기준으로 앞/뒤 분리
-      const [degreePart = '', restPart = ''] = thesisInfo.split('--').map(s => s.trim());
-      // 1-1. degreePart에서 괄호 안의 학위 종류 추출
-      const m = degreePart.match(/\(([^)]+)\)/);
-      const degreeLabel = m ? m[1] : '';
-      const degreeType = degreeLabel
-        ? `${degreeLabel}학위논문`
-        : degreePart.replace(/\s*\(.*\)\s*/, ''); // 괄호가 없으면 원본 앞부분 그대로
-      // 2. restPart에서 institute와 department 추출
-      const restFields = restPart.split(',').map(s => collapse(s));
-      let institute = restFields[0] || '';
-      // 2-1. '대학교 대학원' 처리: 공백 앞뒤로 세분화
-      if (institute.includes(' ')) {
-        const [pre, post] = institute.split(' ');
-        if (pre.includes('대학교') && (post === '대학원' || post === '일반대학원')) {
-          institute = pre;
-        }
+    // 3. department: '학과' 포함 시 공백 앞 텍스트만 사용
+    let department = restFields[1] || '';
+    if (department.includes(' ')) {
+      const [pre] = department.split(' ');
+      if (pre.includes('학과')) {
+        department = pre;
       }
-      // 3. department
-      let department = restFields[1] || '';
-      // 3-1. '학과' 포함 시 공백 앞 텍스트만 사용
-      if (department.includes(' ')) {
-        const [pre, post] = department.split(' ');
-        if (pre.includes('학과')) {
-          department = pre;
-        }
-      }
-      // 4. 조합
-      return `${institute} ${department} ${degreeType}`.trim();
     }
+    // 4. 조합
+    return `${institute} ${department} ${degreeType}`.trim();
+  }
+  return verifyMetadata({
+    authors: tmp.authors,
+    title_main: main,
+    title_sub: sub,
+    journal_name: '',
+    volume: '',
+    issue: '',
     // '학위논문사항' 항목이 없는 페이지에서도 오류 없이 빈 값으로 처리
-    const thesisInfo = formatThesisInfo(tmp.thesisInfoRaw ?? '');
-    // 최종 메타데이터 구성
-    const rawMetadata = {
-      authors: tmp.authors,
-      title_main: main,
-      title_sub: sub,
-      journal_name: '',
-      volume: '',
-      issue: '',
-      publisher: thesisInfo,
-      year: tmp.year,
-      page_first: '',
-      page_last: '',
-      keywords: tmp.keywords,
-      abstract: tmp.abstract
-    };
-    return verifyMetadata(rawMetadata);
-  }
-  else {
-    console.error ('학술지논문/학위논문 여부를 확인할 수 없습니다.');
-    const emptyMetadata ={}
-    return emptyMetadata
-  }
+    publisher: formatThesisInfo(tmp.thesisInfoRaw ?? ''),
+    year: tmp.year,
+    page_first: '',
+    page_last: '',
+    keywords: tmp.keywords,
+    abstract: tmp.abstract
+  });
 }
 
 //----- KCI 페이지 처리 함수: KCI 사이트의 DOM에서 메타데이터 추출 -----
@@ -802,8 +737,7 @@ function parseKOAJ() {
 }
 
 //----- 실행 함수 -----
-function getMetadata() {
-  const academicDB = getAcademicDBType();
+function getMetadata(academicDB) {
   if (!academicDB) {
     console.log('‼️ 추출할 수 있는 메타데이터를 발견하지 못했습니다');
     return {
@@ -821,45 +755,50 @@ function getMetadata() {
       abstract: ''
     };
   }
-  let metadata;
-  if (academicDB === 'RISS') metadata = parseRISS();
-  else if (academicDB === 'KCI') metadata = parseKCI();
-  else if (academicDB === 'KISS') metadata = parseKISS();
-  else if (academicDB === 'DBpia') metadata = parseDBpia();
-  else if (academicDB === 'eArticle') metadata = parseEArticle();
-  else if (academicDB === '스콜라') metadata = parseSCHOLAR();
-  else if (academicDB === 'KOAJ') metadata = parseKOAJ();
-
+  const parsers = {
+    'RISS': parseRISS,
+    'KCI': parseKCI,
+    'KISS': parseKISS,
+    'DBpia': parseDBpia,
+    'eArticle': parseEArticle,
+    '스콜라': parseSCHOLAR,
+    'KOAJ': parseKOAJ
+  };
+  const metadata = parsers[academicDB]();
   console.log(`${academicDB}에서 메타데이터가 추출됨`);
   return metadata;
 }
 
-// popup.js로부터 메시지를 listen
-function getPageInfo() {
-  const metadata   = getMetadata();
-  const academicDB = getAcademicDBType();
-  const url        = window.location.href;
-  const now        = new Date();
-  const year2    = String(now.getFullYear()).slice(-2);
-  const month2   = String(now.getMonth() + 1).padStart(2, '0');
-  const day2     = String(now.getDate()).padStart(2, '0');
-  const hours2   = String(now.getHours()).padStart(2, '0');
-  const minutes2 = String(now.getMinutes()).padStart(2, '0');
-  const seconds2 = String(now.getSeconds()).padStart(2, '0');
-  const timestamp = `${year2}.${month2}.${day2}. ${hours2}:${minutes2}:${seconds2}`;
-  const timestampId = Date.now();
-  return { metadata, academicDB, url, timestamp, timestampId };
+// 추출 일시: 'YY.MM.DD. HH:MM:SS' 형식
+function formatTimestamp(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(date.getFullYear() % 100)}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}. `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'GET_PAGE_INFO') {
-    try {
-      sendResponse({ success: true, pageInfo: getPageInfo() });
-    } catch (err) {
-      sendResponse({ success: false, error: err.message });
-    }
-    return true;
+function getPageInfo() {
+  const academicDB = getAcademicDBType();
+  const metadata = getMetadata(academicDB);
+  const now = new Date();
+  return {
+    metadata,
+    academicDB,
+    url: window.location.href,
+    timestamp: formatTimestamp(now),
+    timestampId: now.getTime()
+  };
+}
+
+// ----- 팝업으로 결과 전달 -----
+// 이 파일은 팝업이 열릴 때마다 chrome.scripting.executeScript({ files })로 주입되며,
+// 파일의 마지막 표현식 값이 executeScript의 result로 팝업에 그대로 전달된다.
+// (메시지 리스너를 쓰지 않으므로, 같은 탭에 여러 번 주입되어도 리스너가 쌓이지 않음)
+// ※ 재주입 시 '이미 선언됨' 오류를 피하려면 최상위에 let/const/class 선언을 두지 말 것.
+(() => {
+  try {
+    return { success: true, pageInfo: getPageInfo() };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: err.message };
   }
-  // sendResponse를 위해 메시지 채널을 열린 상태로 유지
-  return true;
-});
+})();
