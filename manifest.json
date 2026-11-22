@@ -33,9 +33,10 @@
   "host_permissions": [
     "https://*.riss.kr/search/detail/DetailView.do*",
     "https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView*",
+    "https://www.kci.go.kr/kciportal/landing/article.kci*",
     "https://*.kiss.kstudy.com/Detail*/Ar*",
-    "https://*.dbpia.com/journal/articleDetail*",
-    "https://*.dbpia.com/journal/detail*",
+    "https://*.dbpia.co.kr/journal/articleDetail*",
+    "https://*.dbpia.co.kr/journal/detail*",
     "https://*.earticle.net/Article/*",
     "https://*.scholar.kyobobook.co.kr/article/detail/*"
   ]

@@ -1,24 +1,48 @@
-function getAcademicDBType() {
-  const url = window.location.href;
-  if (/^https:\/\/[^\/]*riss[^\/]*\/search\/detail\/DetailView\.do\?/.test(url))
-    return 'RISS';
-  if (/^https:\/\/www\.kci\.go\.kr\/kciportal\/ci\/sereArticleSearch\/ciSereArtiView/.test(url))
-    return 'KCI';
-  if (/^https:\/\/[^/]*kiss[^/]*kstudy[^/]*com[^/]*\/Detail[^/]*\/Ar\?key=/.test(url))
-    return 'KISS';
-  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/articleDetail\?nodeId=/.test(url))
-    return 'DBpia';
-  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/detail\?nodeId=/.test(url))
-    return 'DBpia';
-  if (/^https:\/\/[^/]*earticle[^/]*net[^/]*\/Article\//.test(url))
-    return 'eArticle';
-  if (/^https:\/\/[^/]*scholar[^/]*kyobobook[^/]*\/article\/detail\//.test(url))
-    return '스콜라';
-  if (/^https:\/\/www\.kci\.go\.kr\/kciportal\/landing\/article.kci/.test(url))
-    return 'KOAJ';
-  console.log ("‼️ 현재 페이지를 인식할 수 없습니다.");
+// 현재 페이지가 가리키는 원래 학술 DB 주소를 { host, path, params }로 돌려준다.
+// 대학 도서관 프록시로 접속한 경우도 원래 주소로 되돌려 판별할 수 있게 함:
+//   - 호스트 변형형: https://www-dbpia-co-kr.proxy.OO.ac.kr/…  → 'www.dbpia.co.kr.proxy.OO.ac.kr'
+//                   http://www.riss.kr.libproxy.OO.ac.kr:8080/… (http, 포트 포함)
+//   - 경로 삽입형:  https://libproxy.OO.ac.kr/_Lib_Proxy_Url/https://www.kci.go.kr/…
+// 경로와 쿼리 파라미터는 프록시를 거쳐도 그대로이므로 그것으로 페이지 종류를 판별한다.
+function getTargetLocation() {
+  const { hostname, pathname, search } = window.location;
+  const embedded = pathname.match(/\/(https?:)?\/*([a-z0-9.-]+\.[a-z]{2,})(\/.*)$/i);
+  const isEmbeddedDB = embedded && /riss|kci|kstudy|dbpia|earticle|kyobobook/i.test(embedded[2]);
+  return {
+    host: (isEmbeddedDB ? embedded[2] : hostname).toLowerCase().replaceAll('-', '.'),
+    path: isEmbeddedDB ? embedded[3] : pathname,
+    params: new URLSearchParams(search),
+  };
 }
-  
+
+function getAcademicDBType() {
+  const { host, path, params } = getTargetLocation();
+  if (host.includes('riss') && path.startsWith('/search/detail/DetailView.do'))
+    return 'RISS';
+  if (host.includes('kci.go.kr') && path.startsWith('/kciportal/ci/sereArticleSearch/ciSereArtiView'))
+    return 'KCI';
+  if (host.includes('kci.go.kr') && path.startsWith('/kciportal/landing/article.kci'))
+    return 'KOAJ';
+  if (/kiss.*kstudy.*com/.test(host) && /^\/Detail[^/]*\/Ar/.test(path) && params.has('key'))
+    return 'KISS';
+  if (host.includes('dbpia') && getDBpiaPageType())
+    return 'DBpia';
+  if (/earticle.*net/.test(host) && path.startsWith('/Article/'))
+    return 'eArticle';
+  if (/scholar.*kyobobook/.test(host) && path.startsWith('/article/detail/'))
+    return '스콜라';
+  console.log('‼️ 현재 페이지를 인식할 수 없습니다.');
+}
+
+// DBpia 페이지 종류: 'thesis'(학위논문 /journal/detail) | 'article'(학술지 논문 등 /journal/articleDetail)
+function getDBpiaPageType() {
+  const { path, params } = getTargetLocation();
+  if (!params.has('nodeId')) return null;
+  if (path.startsWith('/journal/detail')) return 'thesis';
+  if (path.startsWith('/journal/articleDetail')) return 'article';
+  return null;
+}
+
 // ----- 공통 헬퍼 함수 -----
 
 // 여러 공백을 하나로 축소하고 앞뒤 공백 제거
@@ -384,9 +408,9 @@ function parseKISS() {
 
 //----- DBpia 페이지 처리 함수: DBpia 사이트의 메타 태그에서 메타데이터 추출 -----
 function parseDBpia() {
-  const url = window.location.href;
+  const pageType = getDBpiaPageType();
   // 학위논문인 경우
-  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/detail\?nodeId=/.test(url)) {
+  if (pageType === 'thesis') {
     const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
     const cleanVal = key => collapse(fixTypography(meta(key)));
 
@@ -497,7 +521,7 @@ function parseDBpia() {
     };
     return verifyMetadata(rawMetadata);
   } // 그 외의 경우 (학술지 논문 등)
-  if (/^https:\/\/[^/]*dbpia[^/]*\/journal\/articleDetail\?nodeId=/.test(url)) {
+  if (pageType === 'article') {
     const meta = name => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
     const cleanVal = key => collapse(fixTypography(meta(key)));
     // 1) 저자(meta)
