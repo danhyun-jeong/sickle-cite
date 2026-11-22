@@ -54,14 +54,9 @@ function todayStamp() {
   return `${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
 }
 
-// 저자·제목·학술지명·발간기관·연도가 모두 같으면 같은 논문으로 본다.
-// (pageInfo/내역 항목 객체 또는 metadata 객체 모두 받음)
-function isSameArticle(a, b) {
-  const metaA = a.metadata ?? a;
-  const metaB = b.metadata ?? b;
-  return JSON.stringify(metaA.authors) === JSON.stringify(metaB.authors)
-    && ['title_main', 'title_sub', 'journal_name', 'publisher', 'year'].every(key => metaA[key] === metaB[key]);
-}
+// 같은 논문인지는 내역에 추가될 때 한 번만 판별해(아래 '1-1. 같은 논문 판별') 묶음 번호(articleId)로 기록해 둔다.
+// 이후로는 이 번호만 비교하므로, 서지정보를 고쳐 저장해도 묶음이 갈라지지 않는다.
+const isSameArticle = (a, b) => Boolean(a.articleId) && a.articleId === b.articleId;
 
 // 사용자에게 잠깐 보이는 알림
 //   type 'info'  : 화면 아래, 어두운 배경 (기본 1초)
@@ -146,6 +141,146 @@ function addToHistory(entry) {
     && item.timestamp === entry.timestamp
     && JSON.stringify(item.metadata) === JSON.stringify(entry.metadata);
   return updateHistory(history => history.some(sameEntry) ? history : [...history, entry]);
+}
+
+
+/* ==========================================================================
+   1-1. 같은 논문 판별
+   ① 추출한 URL이 가리키는 논문 고유번호가 같으면 무조건 같은 논문
+   ② 아니면 서지정보를 느슨하게(퍼지) 비교: 제목이 충분히 비슷하고, 저자가 겹치고,
+      연도가 거의 같고, 논문 종류(학술지/학위)가 같고, 제목 속 숫자가 같아야 함
+   ========================================================================== */
+
+// URL에서 DB별 논문 고유번호를 뽑아 비교용 키로 만든다.
+// 기관 프록시 주소나 검색어 등 덧붙은 파라미터가 달라도 같은 키가 나오도록 함.
+const URL_ID_RULES = [
+  { pattern: /riss/, key: url => url.searchParams.get('control_no'), prefix: 'riss' },
+  { pattern: /dbpia/, key: url => url.searchParams.get('nodeId'), prefix: 'dbpia' },
+  // KCI 상세 페이지와 KOAJ(KCI 랜딩) 페이지는 같은 논문 번호(ART...)를 쓴다
+  { pattern: /kci\.go\.kr/, key: url => url.searchParams.get('sereArticleSearchBean.artiId') ?? url.searchParams.get('arti_id'), prefix: 'kci' },
+  { pattern: /kiss/, key: url => url.searchParams.get('key'), prefix: 'kiss' },
+  { pattern: /earticle/, key: url => url.pathname.match(/\/Article\/(\w+)/)?.[1], prefix: 'earticle' },
+  { pattern: /scholar/, key: url => url.pathname.match(/\/article\/detail\/(\w+)/)?.[1], prefix: 'scholar' },
+];
+
+function articleKeyFromUrl(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const url = new URL(rawUrl);
+    const rule = URL_ID_RULES.find(({ pattern }) => pattern.test(url.hostname));
+    const id = rule?.key(url);
+    if (id) return `${rule.prefix}:${id.toUpperCase()}`;
+    url.hash = '';
+    return url.href;
+  } catch {
+    return rawUrl;
+  }
+}
+
+// 비교용 정규화: 대소문자, 공백, 문장부호·기호(따옴표, 괄호, 쌍점 등) 차이를 무시
+const normalizeForMatch = text => String(text ?? '').normalize('NFC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+
+// 두 글자씩 끊은 조각(bigram)이 얼마나 겹치는지(Dice 계수, 0~1)
+function similarity(a, b) {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const bigrams = text => {
+    const counts = new Map();
+    for (let i = 0; i < text.length - 1; i++) {
+      const pair = text.slice(i, i + 2);
+      counts.set(pair, (counts.get(pair) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const countsA = bigrams(a);
+  let overlap = 0;
+  for (const [pair, count] of bigrams(b)) overlap += Math.min(count, countsA.get(pair) ?? 0);
+  return (2 * overlap) / (a.length + b.length - 2);
+}
+
+const TITLE_SIMILARITY_THRESHOLD = 0.85;
+
+// 항목별 비교용 정보 (같은 객체를 여러 번 비교하므로 캐시)
+const featureCache = new WeakMap();
+function articleFeatures(entry) {
+  if (featureCache.has(entry)) return featureCache.get(entry);
+  const meta = entry.metadata ?? {};
+  const main = normalizeForMatch(meta.title_main);
+  const sub = normalizeForMatch(meta.title_sub);
+  const year = parseInt(meta.year, 10);
+  const features = {
+    urlKey: articleKeyFromUrl(entry.url),
+    authors: new Set(toArray(meta.authors).map(normalizeForMatch).filter(Boolean)),
+    year: Number.isNaN(year) ? null : year,
+    kind: String(meta.publisher ?? '').includes('학위논문') ? 'thesis' : meta.journal_name ? 'article' : null,
+    main,
+    full: main + sub,
+    hasSub: Boolean(sub),
+    digits: main.match(/\d+/g)?.join(',') ?? '',
+  };
+  featureCache.set(entry, features);
+  return features;
+}
+
+// 서지정보만으로 같은 논문이라고 볼 만한지
+function isLikelySameArticle(a, b) {
+  const fa = articleFeatures(a);
+  const fb = articleFeatures(b);
+  if (!fa.main || !fb.main) return false;
+  if (fa.kind && fb.kind && fa.kind !== fb.kind) return false;
+  if (fa.year !== null && fb.year !== null && Math.abs(fa.year - fb.year) > 1) return false;
+  if (fa.authors.size && fb.authors.size && fa.authors.isDisjointFrom(fb.authors)) return false;
+  // '(1)', '(2)' 처럼 숫자만 다른 연속 논문은 제목이 비슷해도 다른 논문
+  if (fa.digits !== fb.digits) return false;
+  if (similarity(fa.full, fb.full) >= TITLE_SIMILARITY_THRESHOLD) return true;
+  // 한쪽 DB에만 부제목이 있는 경우에 한해 본제목끼리 비교 (본제목이 너무 짧으면 제외)
+  return fa.hasSub !== fb.hasSub
+    && Math.min(fa.main.length, fb.main.length) >= 6
+    && similarity(fa.main, fb.main) >= TITLE_SIMILARITY_THRESHOLD;
+}
+
+// 내역에서 같은 논문을 찾는 색인. 저자가 겹치는 항목(과 저자 정보가 없는 항목)만 퍼지 비교한다.
+function createArticleIndex(entries = []) {
+  const byUrlKey = new Map();
+  const byAuthor = new Map();
+  const withoutAuthors = [];
+  const all = [];
+
+  const add = entry => {
+    all.push(entry);
+    const { urlKey, authors } = articleFeatures(entry);
+    if (urlKey && !byUrlKey.has(urlKey)) byUrlKey.set(urlKey, entry);
+    if (!authors.size) withoutAuthors.push(entry);
+    for (const author of authors) {
+      if (!byAuthor.has(author)) byAuthor.set(author, []);
+      byAuthor.get(author).push(entry);
+    }
+  };
+
+  const findMatch = entry => {
+    const { urlKey, authors } = articleFeatures(entry);
+    const sameUrl = urlKey && byUrlKey.get(urlKey);
+    if (sameUrl) return sameUrl;
+    const candidates = authors.size
+      ? new Set([...[...authors].flatMap(author => byAuthor.get(author) ?? []), ...withoutAuthors])
+      : all; // 저자 정보가 없으면 전체와 비교
+    for (const candidate of candidates) {
+      if (isLikelySameArticle(entry, candidate)) return candidate;
+    }
+    return null;
+  };
+
+  entries.forEach(add);
+  return { add, findMatch };
+}
+
+// 묶음 번호가 없는 내역(이전 버전에서 쌓인 것)에 번호를 붙인다. 오래된 것부터 차례로 판별.
+function assignArticleIds(history) {
+  const index = createArticleIndex();
+  for (const entry of [...history].sort((a, b) => (a.timestampId ?? 0) - (b.timestampId ?? 0))) {
+    entry.articleId ||= index.findMatch(entry)?.articleId ?? crypto.randomUUID();
+    index.add(entry);
+  }
 }
 
 
@@ -733,13 +868,13 @@ let historyById = new Map(); // 현재 표에 그려진 항목 (id 문자열 →
 
 // 같은 논문 중 가장 이른 것만 남김
 function keepEarliestPerArticle(history) {
-  const result = [];
+  const earliest = new Map();
   for (const item of history) {
-    const index = result.findIndex(existing => isSameArticle(item, existing));
-    if (index === -1) result.push(item);
-    else if (item.timestamp.localeCompare(result[index].timestamp) < 0) result[index] = item;
+    const key = item.articleId ?? item; // 혹시 번호가 없으면 단독으로 취급
+    const kept = earliest.get(key);
+    if (!kept || item.timestamp.localeCompare(kept.timestamp) < 0) earliest.set(key, item);
   }
-  return result;
+  return [...earliest.values()];
 }
 
 // 모든 필드(metadata, DB, URL, 추출 일시, 태그)가 완전히 같은 항목만 하나로
@@ -1152,13 +1287,18 @@ async function loadCurrentPage() {
   }
 
   // 같은 논문을 전에 추출한 적이 있는지 (새 항목을 저장하기 전에 확인해야 자기 자신과 비교하지 않음)
-  const previous = (await getHistory())
-    .filter(item => isSameArticle(item, pageInfo))
-    .sort((a, b) => a.timestampId - b.timestampId);
-  const earliest = previous[0];
+  const history = await getHistory();
+  const match = createArticleIndex(history).findMatch(pageInfo);
+  const earliest = match && history
+    .filter(item => isSameArticle(item, match))
+    .sort((a, b) => a.timestampId - b.timestampId)[0];
 
-  // 새 추출 결과는 항상 내역에 쌓되, 기존 태그가 있으면 이어받음
-  await addToHistory({ ...pageInfo, projectTags: [...(earliest?.projectTags ?? [])] });
+  // 새 추출 결과는 항상 내역에 쌓되, 같은 논문이면 묶음 번호와 기존 태그를 이어받음
+  await addToHistory({
+    ...pageInfo,
+    articleId: match?.articleId ?? crypto.randomUUID(),
+    projectTags: [...(earliest?.projectTags ?? [])],
+  });
 
   if (earliest) {
     // 사용자가 직접 수정해 저장했을 수 있으므로, 가장 처음 추출(·수정)된 내역을 보여줌
@@ -1219,6 +1359,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 설정을 먼저 불러온 뒤(인용 표기 조합에 필요) 내역 표시 → 현재 페이지 추출
   state.settings = await loadSettings();
   renderSettingsForm();
+  // 이전 버전에서 쌓인 내역에는 묶음 번호가 없으므로 한 번 붙여 줌
+  if ((await getHistory()).some(item => !item.articleId)) await updateHistory(assignArticleIds);
   renderHistory();
   loadCurrentPage();
 });
