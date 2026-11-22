@@ -154,6 +154,8 @@ function addToHistory(entry) {
    ① 추출한 URL이 가리키는 논문 고유번호가 같으면 무조건 같은 논문
    ② 아니면 서지정보 비교: 제목(본제목+부제목)과 학술지명이 같고 저자가 한 명 이상 겹쳐야 함.
       띄어쓰기·문장부호·기호 차이는 무시하고, 한두 글자 오타·오기까지만 같은 것으로 봄
+   ※ 아래 'URL에서 DB별 논문 고유번호…'부터 assignArticleIds까지는 service-worker.js에도
+     똑같이 들어 있다(업데이트 직후 다시 묶기용). 판별 기준을 고치면 양쪽을 함께 고칠 것.
    ========================================================================== */
 
 // URL에서 DB별 논문 고유번호를 뽑아 비교용 키로 만든다.
@@ -279,7 +281,7 @@ function createArticleIndex(entries = []) {
 }
 
 // 묶음 번호가 없는 내역(이전 버전에서 쌓인 것)에 번호를 붙인다. 오래된 것부터 차례로 판별.
-// regroup이 true면 기존 번호를 버리고 처음부터 다시 묶는다 (판별 기준이 바뀌었을 때).
+// regroup이 true면 기존 번호를 버리고 처음부터 다시 묶는다 (업데이트로 판별 기준이 바뀌었을 수 있을 때).
 function assignArticleIds(history, { regroup = false } = {}) {
   const index = createArticleIndex();
   for (const entry of [...history].sort((a, b) => (a.timestampId ?? 0) - (b.timestampId ?? 0))) {
@@ -287,16 +289,6 @@ function assignArticleIds(history, { regroup = false } = {}) {
     entry.articleId ||= index.findMatch(entry)?.articleId ?? crypto.randomUUID();
     index.add(entry);
   }
-}
-
-// 판별 기준의 판(版). 기준을 바꾸면 올려서, 기존 내역을 새 기준으로 한 번 다시 묶게 한다.
-const ARTICLE_GROUPING_VERSION = 2;
-
-async function migrateArticleGrouping() {
-  const { articleGroupingVersion = 0 } = await chrome.storage.local.get('articleGroupingVersion');
-  if (articleGroupingVersion >= ARTICLE_GROUPING_VERSION) return;
-  await updateHistory(history => assignArticleIds(history, { regroup: true }));
-  await chrome.storage.local.set({ articleGroupingVersion: ARTICLE_GROUPING_VERSION });
 }
 
 // 같은 논문 중 가장 먼저 추출된 항목만 남기고 나머지를 지운다 (설정 탭의 '기존 중복 항목 삭제')
@@ -759,20 +751,43 @@ function bindTab1Buttons() {
   // 팝업을 열 때마다 같은 논문의 추출 내역이 한 건씩 쌓이므로, 태그와 마찬가지로
   // 같은 논문인 모든 내역 항목에 함께 반영한다. 묶음은 '수정 전' 서지정보 기준으로 찾아야
   // 저자·제목·연도 등을 고쳐도 고치지 않은 사본이 별도 행으로 남지 않는다.
+  //
+  // 고친 서지정보로 보면 다른 묶음과 같은 논문이 되는 경우(예: 오기를 바로잡아 다른 DB에서 추출한
+  // 같은 논문과 일치하게 됨)에는 그 묶음과 합친다. 반대로 묶음을 나누는 일은 하지 않는다.
+  // 합친 묶음 전체에 고친 서지정보를 반영하고, 태그는 양쪽 것을 모두 모은다.
   $('#save-metadata-btn').addEventListener('click', async () => {
-    let found = false;
+    let target = null;
+    let mergedCount = 0;
     await updateHistory(history => {
-      const target = history.find(entry => entry.timestampId === state.timestampId);
+      target = history.find(entry => entry.timestampId === state.timestampId);
       if (!target) return;
-      history.filter(item => isSameArticle(item, target))
-        .forEach(item => { item.metadata = structuredClone(state.metadata); });
-      found = true;
+      target.metadata = structuredClone(state.metadata); // 판별에 고친 값이 쓰이도록 먼저 반영
+      const mergeIds = new Set(history
+        .filter(item => !isSameArticle(item, target) && isLikelySameArticle(target, item))
+        .map(item => item.articleId));
+      const group = history.filter(item => isSameArticle(item, target) || mergeIds.has(item.articleId));
+      mergedCount = group.filter(item => mergeIds.has(item.articleId)).length;
+      const tags = mergedCount
+        ? [...new Set(group.flatMap(item => item.projectTags ?? []))].slice(0, MAX_TAGS)
+        : null;
+      for (const item of group) {
+        item.articleId = target.articleId;
+        item.metadata = structuredClone(state.metadata);
+        if (tags) item.projectTags = [...tags];
+      }
     });
-    if (!found) {
+    if (!target) {
       showError('저장된 내역을 찾을 수 없어 수정사항이 저장되지 못했습니다');
       return;
     }
-    showToast('서지정보의 직접 수정이 내역에 저장되었습니다');
+    if (mergedCount) {
+      state.tags = [...target.projectTags];
+      tagInput.render();
+      tagInput.refreshCandidates();
+      showToast(`서지정보의 직접 수정이 내역에 저장되었습니다\n같은 논문으로 판별된 다른 내역 ${mergedCount}개와 합쳤습니다`, { duration: 2500 });
+    } else {
+      showToast('서지정보의 직접 수정이 내역에 저장되었습니다');
+    }
     renderHistory();
   });
 }
@@ -1461,8 +1476,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 설정을 먼저 불러온 뒤(인용 표기 조합에 필요) 내역 표시 → 현재 페이지 추출
   state.settings = await loadSettings();
   renderSettingsForm();
-  // 이전 버전에서 쌓인 내역(묶음 번호 없음)이나 판별 기준이 바뀐 경우 한 번 다시 묶음
-  await migrateArticleGrouping();
+  // 업데이트 직후 전체 내역을 다시 묶는 일은 백그라운드(service-worker.js)가 맡는다.
+  // 그 작업이 끝나기 전에 팝업이 열렸거나 묶음 번호가 빠진 항목이 있으면 여기서 붙여 줌
+  if ((await getHistory()).some(item => !item.articleId)) await updateHistory(assignArticleIds);
   renderHistory();
   loadCurrentPage().finally(warnIfStorageLarge);
 });
