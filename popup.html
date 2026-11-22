@@ -93,7 +93,7 @@
         </svg> 서지정보 내보내기
       </button>
       <div class="toggle-controls">
-        <label class="checkbox-label" title="추출한 URL이 같은 논문을 가리키거나, 제목이 거의 같고 저자·연도·논문 종류가 맞으면 같은 논문이라고 판단합니다">
+        <label class="checkbox-label" title="같은 논문 판별 기준: 서지정보를 추출한 웹페이지(URL)가 동일하거나, 본제목, 부제목, 저자, 학술지명이 같은 경우. 단, 띄어쓰기와 각종 기호의 차이는 무시합니다.">
           <span class="toggle-text">같은 논문이 중복될 경우 첫 번째만 표시</span>
           <span class="toggle-switch">
             <input id="deduplicate" type="checkbox" checked>
@@ -166,7 +166,21 @@
         <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
         <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
       </div>
-      <!-- (5) 단축키 설정 안내 -->
+      <!-- (5) 같은 논문을 다시 추출할 때 내역 저장 방식 -->
+      <div class="section" id="duplicate-extraction-section">
+        <h3>같은 논문의 서지정보를 중복 추출할 경우</h3>
+        <div class="inline-group">
+          <label><input type="radio" name="duplicate-extraction" value="keepAll" checked> 같은 논문의 서지정보를 재차 중복 추출할 경우 매번 각각의 추출 시도를 내역에 저장함</label>
+          <label><input type="radio" name="duplicate-extraction" value="firstOnly"> 앞으로는 같은 논문의 서지정보를 재차 중복 추출할 경우 첫 번째 이후의 추출은 내역에 추가되지 않음(이 옵션을 선택해도 이미 내역에 있는 중복 항목이 자동으로 삭제되는 것은 아님)</label>
+        </div>
+        <div id="delete-duplicates-area" hidden>
+          <button id="delete-duplicates-btn" type="button">기존 중복 항목 삭제</button>
+          <div class="instructions">
+            <p>💡 기존 서지정보 추출 내역에서 같은 논문으로 판별되는 항목은 첫 번째로 추출된 항목만 남기고 이후 항목을 삭제함. 태그 추가를 비롯한 수정사항은 이미 중복 항목들에 모두 적용되어 있으므로 초기화되지 않음.</p>
+          </div>
+        </div>
+      </div>
+      <!-- (6) 단축키 설정 안내 -->
       <div class="section">
         <h3>단축키</h3>
         <div class="instructions">
@@ -182,6 +196,14 @@
       <p>내역에서 삭제한 항목은 다시 복원할 수 없습니다.<br>정말 삭제하시겠습니까?</p>
       <button id="confirm-selected-yes">예</button>
       <button id="confirm-selected-no">아니요</button>
+    </div>
+  </div>
+  <!-- 기존 중복 항목 삭제 모달 -->
+  <div id="delete-duplicates-confirm" class="modal hidden">
+    <div class="modal-content">
+      <p>같은 논문의 중복 항목 <span id="delete-duplicates-count"></span>개를 삭제합니다.<br>삭제한 항목은 다시 복원할 수 없습니다.<br>정말 삭제하시겠습니까?</p>
+      <button id="delete-duplicates-yes">예</button>
+      <button id="delete-duplicates-no">아니요</button>
     </div>
   </div>
   <!-- 인용 표기 복사 모달 -->

@@ -1175,3 +1175,37 @@ input[type="radio"]:checked::before {
     -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
     mask-image: linear-gradient(to bottom, #000 55%, transparent);
 }
+
+/* 내역 표 아래 [내역 더 보기] [내역 전체 불러오기] */
+#history-list .history-more {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0 14px;
+}
+/* 탭2 하단 버튼, 탭3 [기존 중복 항목 삭제] 버튼과 같은 모양 */
+#history-list .history-more button,
+#tab3 #delete-duplicates-btn {
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    padding: 4px 8px;
+}
+#history-list .history-more button:hover,
+#tab3 #delete-duplicates-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+#tab3 #delete-duplicates-area {
+    margin-top: 10px;
+}
+#tab3 #delete-duplicates-area[hidden] {
+    display: none;
+}
+#tab3 #delete-duplicates-area .instructions p {
+    margin-top: 6px;
+}

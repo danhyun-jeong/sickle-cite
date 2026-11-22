@@ -10,7 +10,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "commands"
+    "commands",
+    "unlimitedStorage"
   ],
   "background": {
     "service_worker": "service-worker.js"

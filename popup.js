@@ -63,15 +63,20 @@ const isSameArticle = (a, b) => Boolean(a.articleId) && a.articleId === b.articl
 //   type 'error' : 화면 가운데, 붉은 배경 (기본 1.5초)
 function showToast(message, { type = 'info', duration } = {}) {
   const isError = type === 'error';
+  // 아래쪽 안내가 이미 떠 있으면 그 위로 쌓아서 겹치지 않게 함
+  const stackOffset = isError ? 0 : $$('.toast.info').reduce((sum, el) => sum + el.offsetHeight + 8, 0);
   const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
   toast.textContent = message;
   Object.assign(toast.style, {
     position: 'fixed',
     left: '50%',
     ...(isError
       ? { top: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(179, 73, 73, 0.8)' }
-      : { bottom: '20px', transform: 'translateX(-50%)', background: 'rgba(37, 37, 37, 0.8)' }),
+      : { bottom: `${20 + stackOffset}px`, transform: 'translateX(-50%)', background: 'rgba(37, 37, 37, 0.8)' }),
     color: '#fff',
+    width: 'max-content',
+    maxWidth: 'calc(100vw - 40px)',
     padding: '8px 12px',
     borderRadius: '6px',
     zIndex: '1200',
@@ -147,8 +152,8 @@ function addToHistory(entry) {
 /* ==========================================================================
    1-1. 같은 논문 판별
    ① 추출한 URL이 가리키는 논문 고유번호가 같으면 무조건 같은 논문
-   ② 아니면 서지정보를 느슨하게(퍼지) 비교: 제목이 충분히 비슷하고, 저자가 겹치고,
-      연도가 거의 같고, 논문 종류(학술지/학위)가 같고, 제목 속 숫자가 같아야 함
+   ② 아니면 서지정보 비교: 제목(본제목+부제목)과 학술지명이 같고 저자가 한 명 이상 겹쳐야 함.
+      띄어쓰기·문장부호·기호 차이는 무시하고, 한두 글자 오타·오기까지만 같은 것으로 봄
    ========================================================================== */
 
 // URL에서 DB별 논문 고유번호를 뽑아 비교용 키로 만든다.
@@ -190,77 +195,68 @@ function articleKeyFromUrl(rawUrl, academicDB) {
 // 비교용 정규화: 대소문자, 공백, 문장부호·기호(따옴표, 괄호, 쌍점 등) 차이를 무시
 const normalizeForMatch = text => String(text ?? '').normalize('NFC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 
-// 두 글자씩 끊은 조각(bigram)이 얼마나 겹치는지(Dice 계수, 0~1)
-function similarity(a, b) {
-  if (a === b) return 1;
-  if (a.length < 2 || b.length < 2) return 0;
-  const bigrams = text => {
-    const counts = new Map();
-    for (let i = 0; i < text.length - 1; i++) {
-      const pair = text.slice(i, i + 2);
-      counts.set(pair, (counts.get(pair) ?? 0) + 1);
+// 글자 길이에 따라 허용하는 오타·오기 글자 수: 아주 짧으면 0, 보통 1, 긴 제목은 2
+const allowedTypos = length => length <= 5 ? 0 : length <= 15 ? 1 : 2;
+
+// 편집 거리(한 글자 추가·삭제·바꿈 횟수)가 max 이하인지. max를 넘는 순간 계산을 멈춘다.
+function withinEditDistance(a, b, max) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, row[j]);
     }
-    return counts;
-  };
-  const countsA = bigrams(a);
-  let overlap = 0;
-  for (const [pair, count] of bigrams(b)) overlap += Math.min(count, countsA.get(pair) ?? 0);
-  return (2 * overlap) / (a.length + b.length - 2);
+    if (rowMin > max) return false;
+    prev = row;
+  }
+  return prev[b.length] <= max;
 }
 
-const TITLE_SIMILARITY_THRESHOLD = 0.85;
+// 띄어쓰기·기호를 무시하고 비교, 길이에 맞는 만큼만 오타 허용
+const nearlyEqual = (a, b) => withinEditDistance(a, b, allowedTypos(Math.max(a.length, b.length)));
 
 // 항목별 비교용 정보 (같은 객체를 여러 번 비교하므로 캐시)
 const featureCache = new WeakMap();
 function articleFeatures(entry) {
   if (featureCache.has(entry)) return featureCache.get(entry);
   const meta = entry.metadata ?? {};
-  const main = normalizeForMatch(meta.title_main);
-  const sub = normalizeForMatch(meta.title_sub);
-  const year = parseInt(meta.year, 10);
+  // DB마다 본제목/부제목을 나누는 방식이 달라('본제목 : 부제목'을 본제목에 통째로 넣는 등)
+  // 둘을 이어 붙인 전체 제목으로 비교한다
+  const title = normalizeForMatch(`${meta.title_main ?? ''}${meta.title_sub ?? ''}`);
   const features = {
     urlKey: articleKeyFromUrl(entry.url, entry.academicDB),
     authors: new Set(toArray(meta.authors).map(normalizeForMatch).filter(Boolean)),
-    year: Number.isNaN(year) ? null : year,
-    kind: String(meta.publisher ?? '').includes('학위논문') ? 'thesis' : meta.journal_name ? 'article' : null,
-    main,
-    full: main + sub,
-    hasSub: Boolean(sub),
-    digits: main.match(/\d+/g)?.join(',') ?? '',
+    title,
+    journal: normalizeForMatch(meta.journal_name),
+    digits: title.match(/\d+/g)?.join(',') ?? '',
   };
   featureCache.set(entry, features);
   return features;
 }
 
-// 서지정보만으로 같은 논문이라고 볼 만한지
+// 서지정보로 같은 논문인지
 function isLikelySameArticle(a, b) {
   const fa = articleFeatures(a);
   const fb = articleFeatures(b);
-  if (!fa.main || !fb.main) return false;
-  if (fa.kind && fb.kind && fa.kind !== fb.kind) return false;
-  if (fa.year !== null && fb.year !== null && Math.abs(fa.year - fb.year) > 1) return false;
-  if (fa.authors.size && fb.authors.size && fa.authors.isDisjointFrom(fb.authors)) return false;
-  // '(1)', '(2)' 처럼 숫자만 다른 연속 논문은 제목이 비슷해도 다른 논문
-  if (fa.digits !== fb.digits) return false;
-  if (similarity(fa.full, fb.full) >= TITLE_SIMILARITY_THRESHOLD) return true;
-  // 한쪽 DB에만 부제목이 있는 경우에 한해 본제목끼리 비교 (본제목이 너무 짧으면 제외)
-  return fa.hasSub !== fb.hasSub
-    && Math.min(fa.main.length, fb.main.length) >= 6
-    && similarity(fa.main, fb.main) >= TITLE_SIMILARITY_THRESHOLD;
+  return Boolean(fa.title) && Boolean(fb.title)
+    && !fa.authors.isDisjointFrom(fb.authors)   // 저자 한 명 이상 일치 (저자 정보가 없으면 불일치)
+    && fa.digits === fb.digits                  // '(1)'과 '(2)'처럼 숫자만 다른 연속 논문은 다른 논문
+    && nearlyEqual(fa.title, fb.title)
+    && nearlyEqual(fa.journal, fb.journal);     // 학위논문은 양쪽 모두 비어 있어 일치
 }
 
-// 내역에서 같은 논문을 찾는 색인. 저자가 겹치는 항목(과 저자 정보가 없는 항목)만 퍼지 비교한다.
+// 내역에서 같은 논문을 찾는 색인. 저자가 겹치는 항목만 서지정보를 비교한다.
 function createArticleIndex(entries = []) {
   const byUrlKey = new Map();
   const byAuthor = new Map();
-  const withoutAuthors = [];
-  const all = [];
 
   const add = entry => {
-    all.push(entry);
     const { urlKey, authors } = articleFeatures(entry);
     if (urlKey && !byUrlKey.has(urlKey)) byUrlKey.set(urlKey, entry);
-    if (!authors.size) withoutAuthors.push(entry);
     for (const author of authors) {
       if (!byAuthor.has(author)) byAuthor.set(author, []);
       byAuthor.get(author).push(entry);
@@ -271,9 +267,7 @@ function createArticleIndex(entries = []) {
     const { urlKey, authors } = articleFeatures(entry);
     const sameUrl = urlKey && byUrlKey.get(urlKey);
     if (sameUrl) return sameUrl;
-    const candidates = authors.size
-      ? new Set([...[...authors].flatMap(author => byAuthor.get(author) ?? []), ...withoutAuthors])
-      : all; // 저자 정보가 없으면 전체와 비교
+    const candidates = new Set([...authors].flatMap(author => byAuthor.get(author) ?? []));
     for (const candidate of candidates) {
       if (isLikelySameArticle(entry, candidate)) return candidate;
     }
@@ -285,12 +279,49 @@ function createArticleIndex(entries = []) {
 }
 
 // 묶음 번호가 없는 내역(이전 버전에서 쌓인 것)에 번호를 붙인다. 오래된 것부터 차례로 판별.
-function assignArticleIds(history) {
+// regroup이 true면 기존 번호를 버리고 처음부터 다시 묶는다 (판별 기준이 바뀌었을 때).
+function assignArticleIds(history, { regroup = false } = {}) {
   const index = createArticleIndex();
   for (const entry of [...history].sort((a, b) => (a.timestampId ?? 0) - (b.timestampId ?? 0))) {
+    if (regroup) delete entry.articleId;
     entry.articleId ||= index.findMatch(entry)?.articleId ?? crypto.randomUUID();
     index.add(entry);
   }
+}
+
+// 판별 기준의 판(版). 기준을 바꾸면 올려서, 기존 내역을 새 기준으로 한 번 다시 묶게 한다.
+const ARTICLE_GROUPING_VERSION = 2;
+
+async function migrateArticleGrouping() {
+  const { articleGroupingVersion = 0 } = await chrome.storage.local.get('articleGroupingVersion');
+  if (articleGroupingVersion >= ARTICLE_GROUPING_VERSION) return;
+  await updateHistory(history => assignArticleIds(history, { regroup: true }));
+  await chrome.storage.local.set({ articleGroupingVersion: ARTICLE_GROUPING_VERSION });
+}
+
+// 같은 논문 중 가장 먼저 추출된 항목만 남기고 나머지를 지운다 (설정 탭의 '기존 중복 항목 삭제')
+const laterDuplicates = history => {
+  const earliest = new Map();
+  for (const item of history) {
+    const kept = earliest.get(item.articleId);
+    if (!kept || item.timestampId < kept.timestampId) earliest.set(item.articleId, item);
+  }
+  const keep = new Set(earliest.values());
+  return history.filter(item => !keep.has(item));
+};
+
+// --- 저장 용량 ---
+const STORAGE_WARNING_BYTES = 10 * 1024 * 1024;
+
+// 저장된 데이터가 10MB를 넘으면 팝업을 열 때마다 안내 (다른 안내가 떠 있으면 사라진 뒤에)
+async function warnIfStorageLarge() {
+  const bytes = await chrome.storage.local.getBytesInUse(null);
+  if (bytes <= STORAGE_WARNING_BYTES) return;
+  while ($('.toast')) await new Promise(resolve => setTimeout(resolve, 300));
+  showToast(
+    '저장된 서지정보 데이터가 많은 용량을 차지합니다. 프로그램 실행이 느려질 수 있으니, ‘서지정보 내보내기’ 기능을 사용한 뒤 오래된 내역을 삭제해주세요.',
+    { duration: 5000 }
+  );
 }
 
 
@@ -307,7 +338,9 @@ const DEFAULT_SETTINGS = {
   prefix: { volume: 'Vol.', issue: 'No.', either: 'No.' },
   angleTitleBrackets: false,           // 「 」 대신 〈 〉
   angleJournalBrackets: false,         // 『 』 대신 《 》
-  pageRange: { include: false, separator: '–', unit: '쪽' }
+  pageRange: { include: false, separator: '–', unit: '쪽' },
+  // 같은 논문을 다시 추출했을 때: 'keepAll'(매번 내역에 저장) | 'firstOnly'(첫 번째만 저장)
+  duplicateExtraction: 'keepAll'
 };
 const TITLE_SEPARATORS = { 'dash-space': ' — ', 'dash-nospace': '—', 'colon': ': ' };
 
@@ -465,6 +498,8 @@ function renderSettingsForm() {
   $('input[name="page-range-include"]').checked = s.pageRange.include;
   $('input[name="page-range-separator"]').value = s.pageRange.separator;
   $('input[name="page-range-unit"]').value = s.pageRange.unit;
+  $(`input[name="duplicate-extraction"][value="${s.duplicateExtraction}"]`).checked = true;
+  $('#delete-duplicates-area').hidden = s.duplicateExtraction !== 'firstOnly';
 }
 
 // 탭3 화면 → 설정값
@@ -491,6 +526,7 @@ function readSettingsForm() {
     separator: $('input[name="page-range-separator"]').value || DEFAULT_SETTINGS.pageRange.separator,
     unit: $('input[name="page-range-unit"]').value || DEFAULT_SETTINGS.pageRange.unit
   };
+  next.duplicateExtraction = $('input[name="duplicate-extraction"]:checked')?.value ?? DEFAULT_SETTINGS.duplicateExtraction;
   return next;
 }
 
@@ -501,9 +537,37 @@ function bindSettingsForm() {
     const modeChanged = event.target === volIssSelect;
     state.settings = readSettingsForm();
     if (modeChanged) renderVolIssOptions();
+    $('#delete-duplicates-area').hidden = state.settings.duplicateExtraction !== 'firstOnly';
     saveSettings();
     renderCitation();
     renderHistory(); // 내역 표의 제목에도 제목 구분자가 들어가므로 갱신
+  });
+
+  // [기존 중복 항목 삭제] 확인 모달
+  const modal = $('#delete-duplicates-confirm');
+  $('#delete-duplicates-btn').addEventListener('click', async () => {
+    const count = laterDuplicates(await getHistory()).length;
+    if (count === 0) { showToast('삭제할 중복 항목이 없습니다'); return; }
+    $('#delete-duplicates-count').textContent = count;
+    modal.classList.remove('hidden');
+  });
+  $('#delete-duplicates-no').addEventListener('click', () => modal.classList.add('hidden'));
+  $('#delete-duplicates-yes').addEventListener('click', async () => {
+    modal.classList.add('hidden');
+    let removed = [];
+    await updateHistory(history => {
+      removed = laterDuplicates(history);
+      const drop = new Set(removed);
+      return history.filter(item => !drop.has(item));
+    });
+    removed.forEach(item => state.selectedIds.delete(String(item.timestampId)));
+    // 탭1에 표시 중이던 항목이 지워졌으면 남은 첫 번째 항목을 가리키게 함
+    if (removed.some(item => item.timestampId === state.timestampId)) {
+      const kept = (await getHistory()).find(item => item.articleId === removed.find(r => r.timestampId === state.timestampId).articleId);
+      if (kept) state.timestampId = kept.timestampId;
+    }
+    showToast(`중복 항목 ${removed.length}개를 삭제했습니다`);
+    renderHistory();
   });
 }
 
@@ -876,6 +940,11 @@ const dedupToggle = $('#deduplicate');
 const hideColumnsToggle = $('#hide-5-6-columns');
 let historyById = new Map(); // 현재 표에 그려진 항목 (id 문자열 → 항목)
 
+// 내역이 많아도 팝업이 느려지지 않도록 최근 항목부터 일정 개수만 표에 그린다.
+// (검색은 항상 저장된 전체 내역을 대상으로 하고, 그 결과를 같은 방식으로 나눠 보여줌)
+const HISTORY_PAGE_SIZE = 100;
+let historyLimit = HISTORY_PAGE_SIZE;
+
 // 같은 논문 중 가장 이른 것만 남김
 function keepEarliestPerArticle(history) {
   const earliest = new Map();
@@ -912,8 +981,9 @@ async function renderHistory() {
   const hideColumns = hideColumnsToggle.checked;
   $('#tab2').classList.toggle('hide-columns', hideColumns);
 
-  const history = (dedupToggle.checked ? keepEarliestPerArticle(filtered) : removeExactDuplicates(filtered))
+  const sorted = (dedupToggle.checked ? keepEarliestPerArticle(filtered) : removeExactDuplicates(filtered))
     .sort((a, b) => b.timestampId - a.timestampId); // 최신순
+  const history = sorted.slice(0, historyLimit);
   historyById = new Map(history.map(item => [String(item.timestampId), item]));
 
   const style = resolveStyle();
@@ -949,9 +1019,20 @@ async function renderHistory() {
     tbody.append(tr);
   }
 
+  // 아직 그리지 않은 항목이 있으면 표 아래에 [내역 더 보기] [내역 전체 불러오기]
+  const moreControls = [];
+  if (sorted.length > history.length) {
+    const more = document.createElement('div');
+    more.className = 'history-more';
+    more.innerHTML = `
+      <button type="button" data-more="page" title="${Math.min(HISTORY_PAGE_SIZE, sorted.length - history.length)}개를 더 불러옵니다">내역 더 보기</button>
+      <button type="button" data-more="all" title="남은 ${sorted.length - history.length}개를 모두 불러옵니다">내역 전체 불러오기</button>`;
+    moreControls.push(more);
+  }
+
   // 다시 그리는 동안 스크롤 위치 유지
   const { scrollTop } = historyContainer;
-  historyContainer.replaceChildren(table);
+  historyContainer.replaceChildren(table, ...moreControls);
   historyContainer.scrollTop = scrollTop;
   for (const td of $$('th, td', table)) { td.style.border = 'none'; td.style.padding = '6px'; }
   updateSelectionControls();
@@ -1053,6 +1134,12 @@ function bindHistoryTable() {
 
   // 저자·제목·태그 칸 클릭: 탭1로 전환하여 해당 논문 표시
   historyContainer.addEventListener('click', event => {
+    const moreButton = event.target.closest('[data-more]');
+    if (moreButton) {
+      historyLimit = moreButton.dataset.more === 'all' ? Infinity : historyLimit + HISTORY_PAGE_SIZE;
+      renderHistory();
+      return;
+    }
     const cell = event.target.closest('td[data-open]');
     if (!cell) return;
     const item = historyById.get(cell.closest('tr').dataset.timestampId);
@@ -1083,11 +1170,13 @@ function bindHistoryTable() {
   const clearButton = $('#clear-search');
   searchInput.addEventListener('input', () => {
     clearButton.style.display = searchInput.value ? 'flex' : 'none';
+    historyLimit = HISTORY_PAGE_SIZE; // 검색어가 바뀌면 결과를 처음부터 다시 나눠 보여줌
     renderHistory();
   });
   clearButton.addEventListener('click', () => {
     searchInput.value = '';
     clearButton.style.display = 'none';
+    historyLimit = HISTORY_PAGE_SIZE;
     renderHistory();
     searchInput.focus();
   });
@@ -1303,12 +1392,15 @@ async function loadCurrentPage() {
     .filter(item => isSameArticle(item, match))
     .sort((a, b) => a.timestampId - b.timestampId)[0];
 
-  // 새 추출 결과는 항상 내역에 쌓되, 같은 논문이면 묶음 번호와 기존 태그를 이어받음
-  await addToHistory({
-    ...pageInfo,
-    articleId: match?.articleId ?? crypto.randomUUID(),
-    projectTags: [...(earliest?.projectTags ?? [])],
-  });
+  // 새 추출 결과를 내역에 추가. 같은 논문이면 묶음 번호와 기존 태그를 이어받음.
+  // 단, 설정에서 '첫 번째 추출만 저장'을 골랐으면 같은 논문은 다시 추가하지 않음
+  if (!(match && state.settings.duplicateExtraction === 'firstOnly')) {
+    await addToHistory({
+      ...pageInfo,
+      articleId: match?.articleId ?? crypto.randomUUID(),
+      projectTags: [...(earliest?.projectTags ?? [])],
+    });
+  }
 
   if (earliest) {
     // 사용자가 직접 수정해 저장했을 수 있으므로, 가장 처음 추출(·수정)된 내역을 보여줌
@@ -1369,8 +1461,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 설정을 먼저 불러온 뒤(인용 표기 조합에 필요) 내역 표시 → 현재 페이지 추출
   state.settings = await loadSettings();
   renderSettingsForm();
-  // 이전 버전에서 쌓인 내역에는 묶음 번호가 없으므로 한 번 붙여 줌
-  if ((await getHistory()).some(item => !item.articleId)) await updateHistory(assignArticleIds);
+  // 이전 버전에서 쌓인 내역(묶음 번호 없음)이나 판별 기준이 바뀐 경우 한 번 다시 묶음
+  await migrateArticleGrouping();
   renderHistory();
-  loadCurrentPage();
+  loadCurrentPage().finally(warnIfStorageLarge);
 });
