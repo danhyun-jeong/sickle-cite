@@ -68,6 +68,16 @@
   <div id="tab2" class="tab-content">
     <div class="search-box">
       <div class="search-input-wrapper">
+        <select id="search-field" title="검색할 항목">
+          <option value="all">전체</option>
+          <option value="authors">저자</option>
+          <option value="title">제목</option>
+          <option value="journal">학술지명</option>
+          <option value="publisher">발간기관</option>
+          <option value="keywords">키워드</option>
+          <option value="abstract">초록</option>
+          <option value="tags">태그</option>
+        </select>
         <input id="search-history" type="text" placeholder="내역 검색"/>
         <span id="history-count" class="history-count"></span>
         <button id="clear-search" class="clear-search-btn" style="display: none;">
@@ -79,7 +89,23 @@
         </button>
       </div>
     </div>
-    <div id="history-list" style="height:350px; overflow-y:auto;"></div>
+    <!-- 필터: 자료 유형, 발행 연도 범위 -->
+    <div class="history-filters">
+      <span class="filter-label">유형</span>
+      <div id="type-filter" class="type-filter">
+        <button type="button" data-type="all" class="active">전체</button>
+        <div class="segmented">
+          <button type="button" data-type="article">학술지논문</button>
+          <button type="button" data-type="thesis">학위논문</button>
+        </div>
+      </div>
+      <span class="filter-label">연도</span>
+      <input id="year-from" class="year-input" type="text" inputmode="numeric" maxlength="4">
+      <span class="year-sep">~</span>
+      <input id="year-to" class="year-input" type="text" inputmode="numeric" maxlength="4">
+      <button id="reset-filters" type="button" hidden>↺ 필터 초기화</button>
+    </div>
+    <div id="history-list" style="height:301px; overflow-y:auto;"></div>
     <div class="toggle-switch-area">
       <button id="delete-history-selected" title="선택된 항목들을 삭제합니다" type="button">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
@@ -126,7 +152,7 @@
           <h4>제목과 부제목 사이 구분 기호</h4>
           <div class="inline-group">
             <label title="줄표로 쓰이는 기호는 em-dash입니다. 엉뚱한 기호를 대충 비슷하게 생겼다고 막 갖다 쓰지 맙시다."><input type="radio" name="title-sep-option" value="dash-space" checked> 줄표(대시), 앞뒤 간격 있음 ( — )</label>
-            <label title="백번 양보해도, 줄표 들어갈 장리에 하이픈(-)을 쓰는 일만은 없도록 하십시다. 그건 의미도 달라져 버립니다."><input type="radio" name="title-sep-option" value="dash-nospace"> 줄표(대시), 앞뒤 간격 없음 (—)</label>
+            <label title="백번 양보해도, 줄표 들어갈 자리에 하이픈(-)을 쓰는 일만은 없도록 하십시다. 그건 의미도 달라져 버립니다."><input type="radio" name="title-sep-option" value="dash-nospace"> 줄표(대시), 앞뒤 간격 없음 (—)</label>
             <label title="콜론은 원래 앞에는 붙이고 뒤에는 뛰어 쓰는 것이 맞습니다."><input type="radio" name="title-sep-option" value="colon"> 콜론 (: )</label>
           </div>
         </div>

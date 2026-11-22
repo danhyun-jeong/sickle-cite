@@ -28,22 +28,44 @@ input, textarea, select, button {
     border-bottom: 1px solid var(--border);
     margin: 0 -var(--spacing) var(--spacing);
 }
+/* 탭 버튼: 세 탭의 너비를 글자 길이와 상관없이 똑같이(flex-basis 0) 두고,
+   선택 여부와 관계없이 글자 굵기를 같게 해서 탭을 바꿔도 위치가 움직이지 않게 함 */
 .tabs button {
-    flex: 1;
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
     padding: var(--spacing) 0;
     background: none;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-radius: 8px 8px 0 0;
     color: var(--text-secondary);
     font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
     cursor: pointer;
-    transition: color 0.2s, border-color 0.2s;
+    transition: color 0.2s, background-color 0.2s;
+}
+.tabs button:hover {
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.035);
+}
+/* 선택 표시: 아래 경계선 위에 끝이 둥근 막대 */
+.tabs button::after {
+    content: '';
+    position: absolute;
+    left: 18%;
+    right: 18%;
+    bottom: -1px;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: transparent;
+    transition: background-color 0.2s;
 }
 .tabs button.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-    margin: -1px;
-    font-weight: 500;
+    color: var(--accent);
+}
+.tabs button.active::after {
+    background: var(--accent);
 }
 .tab-content {
     display: none;
@@ -260,7 +282,7 @@ table td {
     margin-top: var(--spacing);
     margin-bottom: var(--spacing);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 999px; /* 안쪽의 알약 모양 항목 선택 버튼과 어울리도록 양끝을 둥글게 */
     padding: 6px;
     width: 100%;
     font-size: 14px;
@@ -1315,4 +1337,102 @@ input[type="radio"]:checked::before {
     word-break: keep-all; /* 한국어는 어절 단위로 줄바꿈 */
     overflow-wrap: anywhere;
     pointer-events: none;
+}
+
+/* 검색창 안 왼쪽: 검색할 항목 선택 (알약 모양) */
+#search-field {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 22px;
+    padding: 0 20px 0 10px;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--bg-alt) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 7px center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+#search-field:hover {
+    border-color: var(--text-muted);
+}
+#search-field:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* 검색창 아래 필터 줄: 유형, 연도 */
+.history-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 7px; /* 검색창과의 간격 */
+    padding: 0 16px 8px 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.history-filters .filter-label {
+    color: var(--text);
+}
+.history-filters .filter-label:not(:first-child) {
+    margin-left: 8px;
+}
+/* 유형: [전체] [학술지논문|학위논문] — 모두 알약 모양 */
+.type-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.type-filter > button,
+.segmented {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.type-filter button {
+    padding: 2px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg);
+    cursor: pointer;
+}
+.segmented {
+    display: inline-flex;
+}
+.segmented button {
+    border: none;
+}
+.segmented button + button {
+    border-left: 1px solid var(--border);
+}
+.type-filter button.active {
+    color: #fff;
+    background: var(--accent);
+}
+.type-filter > button.active {
+    border-color: var(--accent);
+}
+.history-filters .year-input {
+    width: 48px;
+    padding: 2px 6px;
+    font-size: 12px;
+    text-align: center;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+#reset-filters {
+    margin-left: auto;
+    padding: 2px 6px;
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+#reset-filters:hover {
+    text-decoration: underline;
 }

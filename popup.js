@@ -1008,10 +1008,15 @@ function renderHistoryCount(allHistory, matchedCount, searching) {
 // 입력한 검색어가 건수 표시 밑으로 들어가지 않도록 입력칸 오른쪽 여백을 맞춤
 function fitSearchPadding() {
   const clearButtonSpace = historyCount.parentElement.classList.contains('has-query') ? 22 : 0;
-  $('#search-history').style.paddingRight = `${historyCount.offsetWidth + clearButtonSpace + 20}px`;
+  const searchInput = $('#search-history');
+  searchInput.style.paddingRight = `${historyCount.offsetWidth + clearButtonSpace + 20}px`;
+  // 왼쪽의 검색 항목 선택 버튼 너비만큼 띄움
+  searchInput.style.paddingLeft = `${$('#search-field').offsetWidth + 12}px`;
 }
 // 탭이 숨겨져 있을 때는 너비가 0이므로, 보이게 되거나 글자 수가 바뀌면 다시 맞춤
-new ResizeObserver(fitSearchPadding).observe(historyCount);
+const searchPaddingObserver = new ResizeObserver(fitSearchPadding);
+searchPaddingObserver.observe(historyCount);
+searchPaddingObserver.observe($('#search-field'));
 
 // 같은 논문 중 가장 이른 것만 남김
 function keepEarliestPerArticle(history) {
@@ -1034,10 +1039,46 @@ function removeExactDuplicates(history) {
   return [...groups.values()];
 }
 
-// 검색어(공백으로 나눈 모든 단어)가 서지정보 또는 태그에 들어 있는 항목만
-function matchesSearch(item, terms) {
-  const haystack = [...Object.values(item.metadata).flatMap(toArray), ...(item.projectTags ?? [])].join(' ');
+// 검색 범위(검색창 왼쪽 선택)별로 찾아볼 값
+const SEARCH_FIELDS = {
+  all: item => [...Object.values(item.metadata).flatMap(toArray), ...(item.projectTags ?? [])],
+  authors: item => toArray(item.metadata.authors),
+  title: item => [item.metadata.title_main, item.metadata.title_sub],
+  journal: item => [item.metadata.journal_name],
+  publisher: item => [item.metadata.publisher],
+  keywords: item => toArray(item.metadata.keywords),
+  abstract: item => [item.metadata.abstract],
+  tags: item => item.projectTags ?? []
+};
+
+// 검색어(공백으로 나눈 모든 단어)가 선택한 범위에 모두 들어 있는 항목만
+function matchesSearch(item, terms, field = 'all') {
+  const haystack = (SEARCH_FIELDS[field] ?? SEARCH_FIELDS.all)(item).filter(Boolean).join(' ');
   return terms.every(term => Hangul.search(haystack, term) !== -1);
+}
+
+// --- 필터: 자료 유형, 발행 연도 범위 ---
+// 학위논문은 발간기관(또는 학술지명)에 '…학위논문'이 들어감 (예: '연세대학교 국문학과 박사학위논문')
+const isThesis = item => /학위\s*논문/.test(`${item.metadata.journal_name ?? ''} ${item.metadata.publisher ?? ''}`);
+const itemYear = item => Number(String(item.metadata.year ?? '').match(/\d{4}/)?.[0]) || null;
+// 연도 칸: 네 자리를 다 입력했을 때만 적용
+const yearInputValue = input => (/^\d{4}$/.test(input.value.trim()) ? Number(input.value.trim()) : null);
+
+function readHistoryFilters() {
+  return {
+    type: $('#type-filter .active')?.dataset.type ?? 'all',
+    from: yearInputValue($('#year-from')),
+    to: yearInputValue($('#year-to'))
+  };
+}
+const isFilterActive = filters => filters.type !== 'all' || filters.from !== null || filters.to !== null;
+
+function matchesFilters(item, { type, from, to }) {
+  if (type !== 'all' && (type === 'thesis') !== isThesis(item)) return false;
+  if (from === null && to === null) return true;
+  const year = itemYear(item);
+  if (year === null) return false;
+  return (from === null || year >= from) && (to === null || year <= to);
 }
 
 const checkedIds = () => $$('#history-list tbody input[type="checkbox"]:checked').map(cb => cb.dataset.timestampId);
@@ -1045,14 +1086,19 @@ const checkedIds = () => $$('#history-list tbody input[type="checkbox"]:checked'
 async function renderHistory() {
   const allHistory = await getHistory();
   const terms = $('#search-history').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = terms.length ? allHistory.filter(item => matchesSearch(item, terms)) : allHistory;
+  const field = $('#search-field').value;
+  const filters = readHistoryFilters();
+  const filtering = isFilterActive(filters);
+  $('#reset-filters').hidden = !filtering;
+  const filtered = allHistory.filter(item =>
+    (!terms.length || matchesSearch(item, terms, field)) && (!filtering || matchesFilters(item, filters)));
   const hideColumns = hideColumnsToggle.checked;
   $('#tab2').classList.toggle('hide-columns', hideColumns);
 
   const sorted = (dedupToggle.checked ? keepEarliestPerArticle(filtered) : removeExactDuplicates(filtered))
     .sort((a, b) => b.timestampId - a.timestampId); // 최신순
   const history = sorted.slice(0, historyLimit);
-  renderHistoryCount(allHistory, sorted.length, terms.length > 0);
+  renderHistoryCount(allHistory, sorted.length, terms.length > 0 || filtering);
   historyById = new Map(history.map(item => [String(item.timestampId), item]));
 
   const style = resolveStyle();
@@ -1248,6 +1294,40 @@ function bindHistoryTable() {
     historyLimit = HISTORY_PAGE_SIZE;
     renderHistory();
     searchInput.focus();
+  });
+
+  // 검색 범위: 바꾸면 안내 문구도 바꾸고 다시 검색
+  const searchField = $('#search-field');
+  searchField.addEventListener('change', () => {
+    const label = searchField.selectedOptions[0].textContent;
+    searchInput.placeholder = searchField.value === 'all' ? '내역 검색' : `${label} 검색`;
+    historyLimit = HISTORY_PAGE_SIZE;
+    renderHistory();
+    searchInput.focus();
+  });
+
+  // 필터: 유형 버튼, 연도 칸, 초기화
+  const rerender = () => {
+    historyLimit = HISTORY_PAGE_SIZE;
+    renderHistory();
+  };
+  $('#type-filter').addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button || button.classList.contains('active')) return;
+    $$('#type-filter button').forEach(b => b.classList.toggle('active', b === button));
+    rerender();
+  });
+  for (const input of [$('#year-from'), $('#year-to')]) {
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/g, '');
+      rerender();
+    });
+  }
+  $('#reset-filters').addEventListener('click', () => {
+    $$('#type-filter button').forEach(b => b.classList.toggle('active', b.dataset.type === 'all'));
+    $('#year-from').value = '';
+    $('#year-to').value = '';
+    rerender();
   });
 }
 
