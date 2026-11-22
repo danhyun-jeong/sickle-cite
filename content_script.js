@@ -131,6 +131,22 @@ function splitTitle(raw) {
 }
 
 // 메타데이터 유효성 확인 함수: 메타데이터의 각 속성이 undefined일 경우 빈 값 반환을 보장
+// 키워드 선별 (모든 DB 공통)
+//  - 한글이 한 글자라도 들어간 키워드 = 한국어 키워드
+//  - 대문자 두 글자 이상 두문자어(AI, SNS 등)는 한국어 키워드에 준해 함께 남김
+//  - 한국어 키워드가 하나라도 있으면 그 밖의 외국어 키워드는 버리고,
+//    없을 때만 외국어 키워드를 그대로 취함
+//  - 국문·영문 키워드 목록에 같은 두문자어가 함께 들어 있는 경우 등, 같은 키워드는 한 번만
+function pickKeywords(list) {
+  const all = [...new Set(list
+    .filter(k => typeof k === 'string')
+    .map(k => k.replace(/\s+/g, ' ').trim())
+    .filter(Boolean))];
+  const isKorean = k => /[가-힣]/.test(k);
+  const isAcronym = k => /^[A-Z]{2,}$/.test(k);
+  return all.some(isKorean) ? all.filter(k => isKorean(k) || isAcronym(k)) : all;
+}
+
 function verifyMetadata(raw) {
   // volume 또는 issue 값이 0(숫자)이거나 '0'(스트링)일 경우, 빈 값으로 통일
   let volume = raw.volume || '';
@@ -162,8 +178,7 @@ function verifyMetadata(raw) {
     }
   }
   if (Array.isArray(metadata.keywords)) {
-    metadata.keywords = metadata.keywords
-      .filter(k => typeof k === 'string' && k.trim() !== '');
+    metadata.keywords = pickKeywords(metadata.keywords);
     if (metadata.keywords.length === 1) {
       metadata.keywords = metadata.keywords[0];
     }
@@ -216,9 +231,9 @@ function parseRISS() {
       case '발행연도':
         tmp.year = content.match(/\d{4}/)?.[0] ?? '';
         break;
-      // 주제어: 키워드 리스트 분리 및 필터링
+      // 주제어: 키워드 리스트 분리 (한국어/외국어 선별은 pickKeywords에서)
       case '주제어':
-        tmp.keywords = collapse(content).split(/[;；,]/).map(s => fixTypography(s)).filter(s => /[가-힣]/.test(s) || /^[A-Z]{2,}$/.test(s));
+        tmp.keywords = collapse(content).split(/[;；,]/).map(s => fixTypography(s));
         break;
       // 수록면: 페이지 범위(first-last) 추출
       case '수록면': {
@@ -380,12 +395,10 @@ function parseKISS() {
   const page_first = meta('citation_firstpage');
   const page_last = meta('citation_lastpage');
   const publisher = removeNonKoreanParen(cleanVal('citation_publisher'));
-  // 4) 키워드(meta) 필터링
-  // 키워드: 한국어가 포함된 키워드만 필터
+  // 4) 키워드(meta)
   const keywords = meta('citation_keywords')
     .split(/[;,]/)
-    .map(s => fixTypography(s))
-    .filter(s => /[가-힣]/.test(s));
+    .map(s => fixTypography(s));
   // 5) 초록(meta)
   const abstract = fixTypography(meta('citation_abstract'));
   // 메타데이터 객체 생성
@@ -443,8 +456,7 @@ function parseDBpia() {
     // 3) 키워드 추출
     const keywords = meta('citation_keywords')
       .split(/[;；,]/)
-      .map(s => collapse(fixTypography(s)))
-      .filter(s => s && (/[가-힣]/.test(s) || /^[A-Za-z]/.test(s)));
+      .map(s => collapse(fixTypography(s)));
 
     // 4) 초록
     const abstract = cleanVal('citation_abstract');
@@ -564,8 +576,7 @@ function parseDBpia() {
     // 5) 키워드(meta)
     const keywords = meta('citation_keywords')
       .split(';')
-      .map(s => collapse(fixTypography(s)))
-      .filter(s => /[가-힣]/.test(s));
+      .map(s => collapse(fixTypography(s)));
     // 6) 초록(meta)
     const abstract = cleanVal('citation_abstract');
     // 7) 발행기관 추출: <dd class="dd text-depth"> 내 첫 번째 <a> onclick에서 'type_value'
@@ -619,8 +630,7 @@ function parseEArticle() {
   // 5) 키워드(meta)
   const keywords = meta('citation_keywords')
     .split(/[;；,]/)
-    .map(s => collapse(fixTypography(s)))
-    .filter(s => /[가-힣]/.test(s));
+    .map(s => collapse(fixTypography(s)));
   // 6) 초록(meta)
   const abstract = cleanVal('citation_abstract');
   // 7) 발행기관 추출: <dt> '발행기관' 다음 <dd>
@@ -687,8 +697,7 @@ function parseSCHOLAR() {
   // 5) 키워드
   const keywords = meta('citation_keywords')
     .split(/[;；,]/)
-    .map(s => collapse(fixTypography(s)))
-    .filter(s => /[가-힣]/.test(s));
+    .map(s => collapse(fixTypography(s)));
   // 6) 발행기관 (첫 번째 info_list li a)
   let publisher = '';
   const pubElem = document.querySelector('.info_list li a');
@@ -736,8 +745,7 @@ function parseKOAJ() {
   // 5) 키워드
   const keywords = meta('citation_keywords')
     .split(/[;；,]/)
-    .map(s => collapse(fixTypography(s)))
-    .filter(s => /[가-힣]/.test(s));
+    .map(s => collapse(fixTypography(s)));
   // 6) 발행기관 (첫 번째 info_list li a)
   const publisher = removeNonKoreanParen(cleanVal('citation_publisher'));
   // 7) 초록
