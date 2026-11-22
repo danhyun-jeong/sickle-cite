@@ -960,6 +960,28 @@ let historyById = new Map(); // 현재 표에 그려진 항목 (id 문자열 →
 const HISTORY_PAGE_SIZE = 500;
 let historyLimit = HISTORY_PAGE_SIZE;
 
+// 검색창 오른쪽의 건수 표시: 저장된 전체 건수, 검색 중이면 그중 해당하는 건수도
+const historyCount = $('#history-count');
+
+function renderHistoryCount(allHistory, matchedCount, searching) {
+  const papers = new Set(allHistory.map(item => item.articleId ?? item)).size;
+  const total = dedupToggle.checked
+    ? `총 ${papers}편`
+    : `논문 ${papers}편 · 추출 ${removeExactDuplicates(allHistory).length}건`;
+  const unit = dedupToggle.checked ? '편' : '건';
+  historyCount.textContent = searching ? `${matchedCount}${unit} / ${total}` : total;
+  historyCount.parentElement.classList.toggle('has-query', $('#search-history').value !== '');
+  fitSearchPadding();
+}
+
+// 입력한 검색어가 건수 표시 밑으로 들어가지 않도록 입력칸 오른쪽 여백을 맞춤
+function fitSearchPadding() {
+  const clearButtonSpace = historyCount.parentElement.classList.contains('has-query') ? 22 : 0;
+  $('#search-history').style.paddingRight = `${historyCount.offsetWidth + clearButtonSpace + 20}px`;
+}
+// 탭이 숨겨져 있을 때는 너비가 0이므로, 보이게 되거나 글자 수가 바뀌면 다시 맞춤
+new ResizeObserver(fitSearchPadding).observe(historyCount);
+
 // 같은 논문 중 가장 이른 것만 남김
 function keepEarliestPerArticle(history) {
   const earliest = new Map();
@@ -999,6 +1021,7 @@ async function renderHistory() {
   const sorted = (dedupToggle.checked ? keepEarliestPerArticle(filtered) : removeExactDuplicates(filtered))
     .sort((a, b) => b.timestampId - a.timestampId); // 최신순
   const history = sorted.slice(0, historyLimit);
+  renderHistoryCount(allHistory, sorted.length, terms.length > 0);
   historyById = new Map(history.map(item => [String(item.timestampId), item]));
 
   const style = resolveStyle();

@@ -272,6 +272,21 @@ table td {
     transition: background-color 0.2s;
 }
 
+/* 검색창 안 오른쪽: 저장된 논문 건수 (검색어가 있으면 지우기 버튼 왼쪽으로 비켜섬) */
+.history-count {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+}
+.search-input-wrapper.has-query .history-count {
+    right: 36px;
+}
+
 .clear-search-btn:hover {
     background-color: rgba(0, 0, 0, 0.05);
 }
