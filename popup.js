@@ -1305,6 +1305,18 @@ async function exportExcel(ids) {
   showToast('선택한 항목에 대한 정보를 엑셀 파일로 저장했습니다');
 }
 
+// 텍스트를 파일로 저장(다운로드)
+function downloadFile(content, fileName, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // --- 내보내기: RIS (Endnote, Mendeley, Zotero 등에서 가져오기 가능) ---
 function formatRis(item, style) {
   const meta = item.metadata;
@@ -1331,17 +1343,167 @@ function formatRis(item, style) {
 async function exportRis(ids) {
   const style = resolveStyle();
   const entries = (await getEntries(ids)).sort((a, b) => b.timestampId - a.timestampId);
-  const blob = new Blob([entries.map(item => formatRis(item, style)).join('')], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Sickle-Cite 서지정보(${todayStamp()}).ris`;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  downloadFile(entries.map(item => formatRis(item, style)).join(''), `Sickle-Cite 서지정보(${todayStamp()}).ris`, 'text/plain;charset=utf-8');
   $('#export-bibliography-modal').classList.add('hidden');
   showToast('선택한 항목의 서지정보를 .ris 파일로 저장했습니다');
+}
+
+// --- 내역 전체 내보내기(백업)·가져오기 (설정 탭) ---
+// 파일 형식: { app: 'Sickle-Cite', version, exportedAt, history: [...] }
+const BACKUP_APP_NAME = 'Sickle-Cite';
+const pad2 = n => String(n).padStart(2, '0');
+
+// 파일 이름용 'YY.MM.DD.hh.mm.ss.'
+const backupFileStamp = date =>
+  [date.getFullYear() % 100, date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map(pad2).join('.') + '.';
+
+// 내보낸 시각: 현지 시각과 시간대, 초 단위까지 (예: '2026-11-23T14:05:09+09:00')
+function localIsoSeconds(date) {
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+    + `T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+    + `${sign}${pad2(Math.floor(Math.abs(offset) / 60))}:${pad2(Math.abs(offset) % 60)}`;
+}
+
+async function exportHistoryBackup() {
+  const history = await getHistory();
+  const now = new Date();
+  const backup = {
+    app: BACKUP_APP_NAME,
+    version: chrome.runtime.getManifest().version,
+    exportedAt: localIsoSeconds(now),
+    history
+  };
+  downloadFile(JSON.stringify(backup, null, 2), `Sickle-Cite_history_backup(${backupFileStamp(now)}).json`, 'application/json');
+  showToast(`서지정보 추출 내역 ${history.length}건을 JSON 파일로 내보냈습니다`);
+}
+
+// 백업 파일 내용 → { history, exportedAt } (Sickle-Cite 백업 파일이 아니면 null)
+function parseHistoryBackup(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { return null; }
+  if (data?.app !== BACKUP_APP_NAME || !Array.isArray(data.history)) return null;
+  const history = data.history.filter(item =>
+    item && typeof item.metadata === 'object' && item.metadata !== null && Number.isFinite(item.timestampId));
+  return { history, exportedAt: data.exportedAt };
+}
+
+// 합치기: 이미 있는 항목(같은 timestampId)은 건너뜀. 파일에서 같은 묶음이던 항목은 함께 두고,
+// 현재 내역과 같은 논문으로 판별되면 그 묶음에 넣는다 (다른 컴퓨터의 묶음 번호는 이쪽과 다르므로).
+// 항목이 새로 들어간 묶음은 태그를 양쪽 것을 모두 모아 맞춘다 (직접 수정 저장 시 합치기와 같음).
+function mergeHistory(current, imported) {
+  const seen = new Set(current.map(item => String(item.timestampId)));
+  const incoming = imported.filter(item => {
+    const id = String(item.timestampId);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  const index = createArticleIndex(current);
+  const groups = [...Map.groupBy(incoming, item => item.articleId ?? item).values()]
+    .map(group => group.sort((a, b) => a.timestampId - b.timestampId))
+    .sort((a, b) => a[0].timestampId - b[0].timestampId);
+  const touched = new Set();
+  for (const group of groups) {
+    const articleId = group.map(item => index.findMatch(item)).find(Boolean)?.articleId ?? crypto.randomUUID();
+    touched.add(articleId);
+    for (const item of group) {
+      item.articleId = articleId;
+      index.add(item);
+    }
+  }
+  const history = [...current, ...incoming];
+  for (const articleId of touched) {
+    const group = history.filter(item => item.articleId === articleId).sort((a, b) => a.timestampId - b.timestampId);
+    const tags = [...new Set(group.flatMap(item => item.projectTags ?? []))].slice(0, MAX_TAGS);
+    group.forEach(item => { item.projectTags = [...tags]; });
+  }
+  return { history, added: incoming.length, skipped: imported.length - incoming.length };
+}
+
+// 전체 교체: 파일 안에서 겹치는 항목만 정리하고, 묶음 번호가 빠진 항목에 번호를 붙임
+function replaceHistory(imported) {
+  const unique = [...new Map(imported.map(item => [String(item.timestampId), item])).values()];
+  assignArticleIds(unique);
+  return unique;
+}
+
+// 'YYYY-MM-DDThh:mm:ss…' → 'YY.MM.DD. hh:mm:ss' (안내 문구용)
+function formatExportedAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${pad2(date.getFullYear() % 100)}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}. `
+    + `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
+function bindHistoryBackup() {
+  const fileInput = $('#history-import-file');
+  const modal = $('#import-history-modal');
+  let pending = null; // 선택한 파일에서 읽은 내역
+
+  $('#history-export-btn').addEventListener('click', exportHistoryBackup);
+
+  $('#history-import-btn').addEventListener('click', () => {
+    fileInput.value = ''; // 같은 파일을 다시 골라도 change가 일어나도록
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', async () => {
+    const [file] = fileInput.files;
+    if (!file) return;
+    pending = parseHistoryBackup(await file.text());
+    if (!pending) { showError('Sickle-Cite 내역 백업 파일이 아닙니다'); return; }
+    if (pending.history.length === 0) { showError('파일에 가져올 내역이 없습니다'); return; }
+    const exportedAt = formatExportedAt(pending.exportedAt);
+    const currentCount = (await getHistory()).length;
+    $('#import-history-summary').innerHTML = '';
+    $('#import-history-summary').append(
+      `가져올 파일: 내역 ${pending.history.length}건${exportedAt ? ` (${exportedAt} 내보냄)` : ''}`,
+      document.createElement('br'),
+      `현재 내역: ${currentCount}건`
+    );
+    modal.classList.remove('hidden');
+  });
+
+  const finish = message => {
+    modal.classList.add('hidden');
+    pending = null;
+    showToast(message, { duration: 2500 });
+    renderHistory();
+    tagInput.refreshCandidates();
+  };
+
+  $('#import-merge').addEventListener('click', async () => {
+    let result;
+    await updateHistory(history => {
+      result = mergeHistory(history, pending.history);
+      return result.history;
+    });
+    if (result.added === 0) {
+      finish(`새로 가져올 내역이 없습니다\n(파일의 내역 ${result.skipped}건이 모두 이미 있음)`);
+      return;
+    }
+    finish(`내역 ${result.added}건을 가져와 합쳤습니다`
+      + (result.skipped ? `\n(이미 있는 항목 ${result.skipped}건은 건너뜀)` : ''));
+  });
+
+  $('#import-replace').addEventListener('click', async () => {
+    let count = 0;
+    await updateHistory(() => {
+      const replaced = replaceHistory(pending.history);
+      count = replaced.length;
+      return replaced;
+    });
+    state.selectedIds.clear();
+    finish(`내역을 파일의 내역 ${count}건으로 교체했습니다`);
+  });
+
+  $('#import-cancel').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    pending = null;
+  });
 }
 
 function bindHistoryButtons() {
@@ -1493,6 +1655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindHistoryTable();
   bindHistoryButtons();
   bindSettingsForm();
+  bindHistoryBackup();
   setupWindowsScrollbars();
   tagInput.focus(); // 팝업을 열자마자 바로 태그를 입력할 수 있게
 

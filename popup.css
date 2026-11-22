@@ -1200,7 +1200,8 @@ input[type="radio"]:checked::before {
 }
 /* 탭2 하단 버튼, 탭3 [기존 중복 항목 삭제] 버튼과 같은 모양 */
 #history-list .history-more button,
-#tab3 #delete-duplicates-btn {
+#tab3 #delete-duplicates-btn,
+#tab3 .backup-buttons button {
     font-size: 12px;
     color: var(--accent);
     background: none;
@@ -1211,7 +1212,8 @@ input[type="radio"]:checked::before {
     padding: 4px 8px;
 }
 #history-list .history-more button:hover,
-#tab3 #delete-duplicates-btn:hover {
+#tab3 #delete-duplicates-btn:hover,
+#tab3 .backup-buttons button:hover {
     background: var(--accent);
     color: var(--bg);
 }
@@ -1223,4 +1225,21 @@ input[type="radio"]:checked::before {
 }
 #tab3 #delete-duplicates-area .instructions p {
     margin-top: 6px;
+}
+
+/* 설정 탭: 내역 내보내기(백업)·가져오기 버튼 */
+#tab3 .backup-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* 설정 탭의 💡 설명문: 둘째 줄부터 '💡 ' 너비만큼 들여쓰기 */
+#tab3 .instructions p,
+#tab3 #vol-iss-options p {
+    padding-left: var(--bulb-indent);
+    text-indent: calc(-1 * var(--bulb-indent));
+}
+#tab3 {
+    --bulb-indent: 1.25em; /* 13px 글씨에서 '💡 '의 실제 너비 */
 }
