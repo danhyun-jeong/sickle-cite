@@ -1168,3 +1168,10 @@ input[type="radio"]:checked::before {
     margin: 0;
     max-width: 355px;
 }
+
+/* 국문 초록: 길면 몇 줄만 보여주고 아래쪽을 흐리게 (클릭하면 전체 펼침) */
+#tab1 .left-pane .abstract-input.is-collapsed {
+    cursor: pointer;
+    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+    mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
