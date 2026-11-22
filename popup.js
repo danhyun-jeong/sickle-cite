@@ -326,9 +326,11 @@ const SETTINGS_KEY = 'citationSettings';
 const DEFAULT_SETTINGS = {
   titleSeparator: 'dash-space',        // 'dash-space' | 'dash-nospace' | 'colon'
   volumeIssueStyle: 'none',            // 'none' | 'suffix' | 'prefix'
-  suffix: { volume: '권', issue: '호', either: '호', addJe: true },
+  // addJeVolume/addJeIssue: 권수·호수 앞에 '제'를 각각 붙일지 (권/호 구분이 없을 때는 호수 설정을 따름)
+  suffix: { volume: '권', issue: '호', either: '호', addJeVolume: true, addJeIssue: true },
   prefix: { volume: 'Vol.', issue: 'No.', either: 'No.' },
   angleTitleBrackets: false,           // 「 」 대신 〈 〉
+  halfwidthTitleBrackets: false,       // 「 」 대신 반각 ｢ ｣ (〈 〉를 쓰면 무시)
   angleJournalBrackets: false,         // 『 』 대신 《 》
   pageRange: { include: false, separator: '–', unit: '쪽' },
   // 같은 논문을 다시 추출했을 때: 'keepAll'(매번 내역에 저장) | 'firstOnly'(첫 번째만 저장)
@@ -338,10 +340,16 @@ const TITLE_SEPARATORS = { 'dash-space': ' — ', 'dash-nospace': '—', 'colon'
 
 // 저장된 설정에 빠진 항목이 있으면 기본값으로 채움
 function withDefaults(saved = {}) {
+  // 1.8.0 이전: 권·호 '제'를 하나(addJe)로 저장했음 → 둘 다 그 값으로
+  const { addJe, ...savedSuffix } = saved.suffix ?? {};
   return {
     ...DEFAULT_SETTINGS,
     ...saved,
-    suffix: { ...DEFAULT_SETTINGS.suffix, ...saved.suffix },
+    suffix: {
+      ...DEFAULT_SETTINGS.suffix,
+      ...(typeof addJe === 'boolean' && { addJeVolume: addJe, addJeIssue: addJe }),
+      ...savedSuffix
+    },
     prefix: { ...DEFAULT_SETTINGS.prefix, ...saved.prefix },
     pageRange: { ...DEFAULT_SETTINGS.pageRange, ...saved.pageRange }
   };
@@ -360,7 +368,7 @@ function migrateLegacySettings(old) {
     titleSeparator,
     volumeIssueStyle,
     ...(volumeIssueStyle === 'suffix' && {
-      suffix: { volume: old.volumeSuffix ?? '', issue: old.issueSuffix ?? '', either: old.eitherSuffix ?? '', addJe: old.volumePrefix === '제' }
+      suffix: { volume: old.volumeSuffix ?? '', issue: old.issueSuffix ?? '', either: old.eitherSuffix ?? '', addJeVolume: old.volumePrefix === '제', addJeIssue: old.issuePrefix === '제' }
     }),
     ...(volumeIssueStyle === 'prefix' && {
       prefix: { volume: old.volumePrefix ?? '', issue: old.issuePrefix ?? '', either: old.eitherPrefix ?? '' }
@@ -397,8 +405,8 @@ function resolveStyle(settings = state.settings) {
     titleSeparator: TITLE_SEPARATORS[settings.titleSeparator] ?? TITLE_SEPARATORS['dash-space'],
     volumePrefix: '', volumeSuffix: '', volumeIssueSeparator: '',
     issuePrefix: '', issueSuffix: '', eitherPrefix: '', eitherSuffix: '',
-    titleBracketLeft: settings.angleTitleBrackets ? '〈' : '「',
-    titleBracketRight: settings.angleTitleBrackets ? '〉' : '」',
+    titleBracketLeft: settings.angleTitleBrackets ? '〈' : settings.halfwidthTitleBrackets ? '｢' : '「',
+    titleBracketRight: settings.angleTitleBrackets ? '〉' : settings.halfwidthTitleBrackets ? '｣' : '」',
     journalBracketLeft: settings.angleJournalBrackets ? '《' : '『',
     journalBracketRight: settings.angleJournalBrackets ? '》' : '』',
     pageRangeInclude: settings.pageRange.include,
@@ -408,9 +416,10 @@ function resolveStyle(settings = state.settings) {
   switch (settings.volumeIssueStyle) {
     case 'suffix': {
       // 예: 제57권 제2호
-      const je = settings.suffix.addJe ? '제' : '';
+      const volumeJe = settings.suffix.addJeVolume ? '제' : '';
+      const issueJe = settings.suffix.addJeIssue ? '제' : '';
       Object.assign(style, {
-        volumePrefix: je, issuePrefix: je, eitherPrefix: je,
+        volumePrefix: volumeJe, issuePrefix: issueJe, eitherPrefix: issueJe,
         volumeSuffix: settings.suffix.volume, issueSuffix: settings.suffix.issue, eitherSuffix: settings.suffix.either,
         volumeIssueSeparator: ' '
       });
@@ -440,6 +449,16 @@ function renderVolIssOptions() {
   const mode = state.settings.volumeIssueStyle;
   const field = (name, label) =>
     `<div class="field"><label>${label}</label><input type="text" name="${name}"></div>`;
+  const jeToggle = (name, label) => `
+      <div class="field">
+        <label class="checkbox-label">
+          <span class="toggle-text">${label}</span>
+          <span class="toggle-switch">
+            <input type="checkbox" name="${name}">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>`;
   let html = '';
   if (mode === 'none') {
     html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">💡 권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
@@ -448,15 +467,8 @@ function renderVolIssOptions() {
       ${field('volume-suffix', '권수 단위:')}
       ${field('issue-suffix', '호수 단위:')}
       ${field('either-suffix', '구분 없을 시 단위:')}
-      <div class="field">
-        <label class="checkbox-label">
-          <span class="toggle-text">권호수 앞에 접두사 '제' 붙이기</span>
-          <span class="toggle-switch">
-            <input type="checkbox" name="prefix-제">
-            <span class="slider"></span>
-          </span>
-        </label>
-      </div>`;
+      ${jeToggle('prefix-제-volume', "권수 앞에 접두사 '제' 붙이기")}
+      ${jeToggle('prefix-제-issue', "호수 앞에 접두사 '제' 붙이기")}`;
   } else if (mode === 'prefix') {
     html = `
       ${field('volume-prefix', '권수 접두사:')}
@@ -471,7 +483,8 @@ function renderVolIssOptions() {
     set('volume-suffix', state.settings.suffix.volume);
     set('issue-suffix', state.settings.suffix.issue);
     set('either-suffix', state.settings.suffix.either);
-    $('[name="prefix-제"]', volIssContainer).checked = state.settings.suffix.addJe;
+    $('[name="prefix-제-volume"]', volIssContainer).checked = state.settings.suffix.addJeVolume;
+    $('[name="prefix-제-issue"]', volIssContainer).checked = state.settings.suffix.addJeIssue;
   } else if (mode === 'prefix') {
     set('volume-prefix', state.settings.prefix.volume);
     set('issue-prefix', state.settings.prefix.issue);
@@ -486,12 +499,19 @@ function renderSettingsForm() {
   volIssSelect.value = s.volumeIssueStyle;
   renderVolIssOptions();
   $('input[name="title-brackets"]').checked = s.angleTitleBrackets;
+  $('input[name="title-brackets-halfwidth"]').checked = s.halfwidthTitleBrackets;
+  syncHalfwidthToggle();
   $('input[name="journal-brackets"]').checked = s.angleJournalBrackets;
   $('input[name="page-range-include"]').checked = s.pageRange.include;
   $('input[name="page-range-separator"]').value = s.pageRange.separator;
   $('input[name="page-range-unit"]').value = s.pageRange.unit;
   $(`input[name="duplicate-extraction"][value="${s.duplicateExtraction}"]`).checked = true;
   $('#delete-duplicates-area').hidden = s.duplicateExtraction !== 'firstOnly';
+}
+
+// 홑화살괄호를 쓰면 반각 홑낫표 토글은 의미가 없으므로 비활성화
+function syncHalfwidthToggle() {
+  $('input[name="title-brackets-halfwidth"]').disabled = $('input[name="title-brackets"]').checked;
 }
 
 // 탭3 화면 → 설정값
@@ -504,13 +524,15 @@ function readSettingsForm() {
   if (renderedMode === 'suffix') {
     next.suffix = {
       volume: value('volume-suffix'), issue: value('issue-suffix'), either: value('either-suffix'),
-      addJe: $('[name="prefix-제"]', volIssContainer)?.checked ?? true
+      addJeVolume: $('[name="prefix-제-volume"]', volIssContainer)?.checked ?? true,
+      addJeIssue: $('[name="prefix-제-issue"]', volIssContainer)?.checked ?? true
     };
   } else if (renderedMode === 'prefix') {
     next.prefix = { volume: value('volume-prefix'), issue: value('issue-prefix'), either: value('either-prefix') };
   }
   next.volumeIssueStyle = volIssSelect.value;
   next.angleTitleBrackets = $('input[name="title-brackets"]').checked;
+  next.halfwidthTitleBrackets = $('input[name="title-brackets-halfwidth"]').checked;
   next.angleJournalBrackets = $('input[name="journal-brackets"]').checked;
   next.pageRange = {
     include: $('input[name="page-range-include"]').checked,
@@ -529,6 +551,7 @@ function bindSettingsForm() {
     const modeChanged = event.target === volIssSelect;
     state.settings = readSettingsForm();
     if (modeChanged) renderVolIssOptions();
+    syncHalfwidthToggle();
     $('#delete-duplicates-area').hidden = state.settings.duplicateExtraction !== 'firstOnly';
     saveSettings();
     renderCitation();
@@ -608,6 +631,7 @@ function renderCitation() {
 
 const metadataField = key => $(`#tab1 .left-pane [name="${key}"]`);
 const abstractField = metadataField('abstract');
+const abstractToggle = $('#abstract-toggle');
 
 // 내역 항목(또는 새로 추출한 pageInfo)을 탭1에 표시
 function showEntry(entry) {
@@ -645,12 +669,15 @@ function collapseAbstract() {
   abstractField.style.height = `${isLong ? collapsedHeight : fullHeight}px`;
   abstractField.classList.toggle('is-collapsed', isLong);
   abstractField.title = isLong ? '클릭하면 초록 전체를 볼 수 있습니다' : '';
+  abstractToggle.hidden = !isLong;
+  abstractToggle.textContent = '▾ 더 보기';
 }
 function expandAbstract() {
   if (!abstractField.classList.contains('is-collapsed')) return;
   abstractField.classList.remove('is-collapsed');
   abstractField.title = '';
   fitTextarea(abstractField);
+  abstractToggle.textContent = '▴ 접기';
 }
 
 // 필드를 직접 수정하면 state.metadata에 반영하고 인용 표기를 다시 조합 (리스너는 한 번만 등록)
@@ -667,6 +694,10 @@ function bindMetadataFields() {
     renderCitation();
   });
   abstractField.addEventListener('focus', expandAbstract);
+  abstractToggle.addEventListener('click', () => {
+    if (abstractField.classList.contains('is-collapsed')) expandAbstract();
+    else collapseAbstract();
+  });
 }
 
 // 서지정보를 '항목: 값' 줄글로
@@ -1506,6 +1537,58 @@ function bindHistoryBackup() {
   });
 }
 
+// --- 툴팁 (내역·설정 탭) ---
+// 브라우저 기본 툴팁(title) 대신 같은 디자인의 툴팁을 직접 띄운다.
+// 내역 탭은 빨리, 설정 탭은 기본 툴팁과 비슷한 시간 뒤에 뜨도록 지연 시간을 따로 준다.
+const TOOLTIP_DELAY_FAST = 250;
+const TOOLTIP_DELAY_NORMAL = 1000;
+const tooltipBox = Object.assign(document.createElement('div'), { className: 'quick-tooltip', hidden: true });
+document.body.append(tooltipBox);
+
+function bindQuickTooltips(root, delay) {
+  const tip = tooltipBox;
+  let target = null;
+  let timer = 0;
+  let mouse = { x: 0, y: 0 };
+
+  const hide = () => {
+    clearTimeout(timer);
+    tip.hidden = true;
+    target = null;
+  };
+  const show = () => {
+    if (!target?.isConnected) return hide();
+    tip.textContent = target.dataset.tooltip;
+    tip.hidden = false;
+    // 커서 오른쪽 아래에 두되, 창 밖으로 나가면 안쪽(위쪽)으로
+    const { width, height } = tip.getBoundingClientRect();
+    const x = Math.min(mouse.x + 10, window.innerWidth - width - 6);
+    const y = mouse.y + 18 + height > window.innerHeight - 6 ? mouse.y - height - 8 : mouse.y + 18;
+    Object.assign(tip.style, { left: `${Math.max(6, x)}px`, top: `${Math.max(6, y)}px` });
+  };
+
+  root.addEventListener('mouseover', event => {
+    const el = event.target.closest('[title], [data-tooltip]');
+    if (el && el === target) return;
+    hide();
+    if (!el || !root.contains(el)) return;
+    // 기본 툴팁이 함께 뜨지 않도록 title을 data-tooltip으로 옮김
+    if (el.hasAttribute('title')) {
+      el.dataset.tooltip = el.title;
+      el.removeAttribute('title');
+    }
+    if (!el.dataset.tooltip) return;
+    target = el;
+    timer = setTimeout(show, delay);
+  });
+  root.addEventListener('mousemove', event => {
+    mouse = { x: event.clientX, y: event.clientY };
+  });
+  root.addEventListener('mouseleave', hide);
+  root.addEventListener('mousedown', hide);
+  document.addEventListener('scroll', hide, true);
+}
+
 function bindHistoryButtons() {
   const openModal = id => $(`#${id}`).classList.remove('hidden');
   const closeModal = id => $(`#${id}`).classList.add('hidden');
@@ -1656,6 +1739,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindHistoryButtons();
   bindSettingsForm();
   bindHistoryBackup();
+  bindQuickTooltips($('#tab2'), TOOLTIP_DELAY_FAST);
+  bindQuickTooltips($('#tab3'), TOOLTIP_DELAY_NORMAL);
   setupWindowsScrollbars();
   tagInput.focus(); // 팝업을 열자마자 바로 태그를 입력할 수 있게
 

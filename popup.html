@@ -31,7 +31,10 @@
         <div class="field"><label>키워드</label><textarea rows="1" name="keywords" style="resize: vertical;"></textarea></div>
         <div class="field">
           <label>국문 초록</label>
-          <textarea class="abstract-input" name="abstract" rows="3"></textarea>
+          <div class="abstract-box">
+            <textarea class="abstract-input" name="abstract" rows="3"></textarea>
+            <button type="button" id="abstract-toggle" class="abstract-toggle" hidden></button>
+          </div>
         </div>
         </div> <!-- end metadata-container -->
         <div class="actions">
@@ -149,6 +152,14 @@
               <span class="slider"></span>
             </span>          
           </label>
+          <label class="checkbox-label">
+            <span class="toggle-text">전각 홑낫표 「」 대신 반각 홑낫표 ｢｣ 쓰기</span>
+            <span class="toggle-switch">
+              <input type="checkbox" name="title-brackets-halfwidth">
+              <span class="slider"></span>
+            </span>
+          </label>
+          <p class="toggle-note">(전각 홑낫표가 표준이므로, 반각 홑낫표 사용은 권장하지 않음)</p>
           <label class="checkbox-label">
             <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
             <span class="toggle-switch">
