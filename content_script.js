@@ -27,16 +27,18 @@ function collapse(s) { return s.replace(/\s+/g, ' ').trim(); }
 // 인용 및 구분자 기호 교정
 function fixTypography(text) {
   let s = text.trim();
+  // DB 측 입력 오류로 작은따옴표가 중복된 경우(''…'') 하나로 축소 (작은따옴표 변환보다 먼저)
+  s = s.replace(/'{2,}/g, "'");
   s = s.replace(/`([^`]+)`/g, '‘$1’');
-  s = s.replace(/′([^`]+)′/g, '‘$1’');
+  s = s.replace(/′([^′]+)′/g, '‘$1’');
   s = s.replace(/'([^']+)'/g, '‘$1’');
-  s = s.replace(/"([^\"]+)"/g, '“$1”');
-  s = s.replace(/''([^\"]+)''/g, '“$1”');
-  s = s.replace(/″([^\"]+)″/g, '“$1”');
-  s = s.replace(/</g, '〈').replace(/>/g, '〉');
-  s = s.replace(/｢/g, '「').replace(/｣/g, '」');
-  s = s.replace(/<</g, '《').replace(/>>/g, '》');
-  s = s.replace(/≪/g, '《').replace(/≫/g, '》');
+  s = s.replace(/"([^"]+)"/g, '“$1”');
+  s = s.replace(/″([^″]+)″/g, '“$1”');
+  // 겹화살괄호(<<, >>)를 홑화살괄호(<, >)보다 먼저 변환해야 함
+  s = s.replaceAll('<<', '《').replaceAll('>>', '》');
+  s = s.replaceAll('<', '〈').replaceAll('>', '〉');
+  s = s.replaceAll('｢', '「').replaceAll('｣', '」');
+  s = s.replaceAll('≪', '《').replaceAll('≫', '》');
   s = s.replace(/\.{3}/g, '…');
   s = s.replace(/[•ㆍᆞ・･‧⋅]/g, '·');
   s = s.replace(/[᠆‐‑⁃⁻₋﹣]/g, '-');
@@ -529,17 +531,16 @@ function parseDBpia() {
         }
       }
     }
-    // 학위 논문 종류 감지
-    let thesisType = '';
-    const sliderImg = document.querySelector('.thesisDetail__upper__slider img');
-    if (sliderImg) {
-      const src = sliderImg.getAttribute('src') || '';
-      if (src.includes('master')) thesisType = '석사학위논문';
-      else if (src.includes('doctor')) thesisType = '박사학위논문';
-    }
-    if (thesisType) {
-      publisher = `${institute} ${thesisType}`;
-    }
+    // 학위 논문 종류 감지: 표지 이미지 파일명(.../service/cover/master_K.png, doctor_K.png)으로 판별
+    // 1순위 og:image 메타 태그, 2순위 본문의 표지 <img> (메타 태그가 없을 경우 대비)
+    const coverSrc =
+      document.querySelector('meta[property="og:image"]')?.content ||
+      document.querySelector('img[src*="/service/cover/"]')?.getAttribute('src') ||
+      '';
+    const degree = coverSrc.match(/\/cover\/(master|doctor)_/)?.[1];
+    const thesisType = { master: '석사학위논문', doctor: '박사학위논문' }[degree] ?? '';
+    // 학위 종류를 판별하지 못해도 기관명은 유지
+    const publisher = thesisType ? `${institute} ${thesisType}` : institute;
 
     // 6) 연도
     const year = meta('citation_publication_date') || '';
