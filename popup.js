@@ -152,23 +152,33 @@ function addToHistory(entry) {
    ========================================================================== */
 
 // URL에서 DB별 논문 고유번호를 뽑아 비교용 키로 만든다.
-// 기관 프록시 주소나 검색어 등 덧붙은 파라미터가 달라도 같은 키가 나오도록 함.
-const URL_ID_RULES = [
-  { pattern: /riss/, key: url => url.searchParams.get('control_no'), prefix: 'riss' },
-  { pattern: /dbpia/, key: url => url.searchParams.get('nodeId'), prefix: 'dbpia' },
-  // KCI 상세 페이지와 KOAJ(KCI 랜딩) 페이지는 같은 논문 번호(ART...)를 쓴다
-  { pattern: /kci\.go\.kr/, key: url => url.searchParams.get('sereArticleSearchBean.artiId') ?? url.searchParams.get('arti_id'), prefix: 'kci' },
-  { pattern: /kiss/, key: url => url.searchParams.get('key'), prefix: 'kiss' },
-  { pattern: /earticle/, key: url => url.pathname.match(/\/Article\/(\w+)/)?.[1], prefix: 'earticle' },
-  { pattern: /scholar/, key: url => url.pathname.match(/\/article\/detail\/(\w+)/)?.[1], prefix: 'scholar' },
-];
+// 대학 도서관 프록시로 접속하면 호스트가 'www-dbpia-co-kr.proxy.OO.ac.kr',
+// 'www.riss.kr.libproxy.OO.ac.kr' 처럼 바뀌지만 경로와 파라미터는 그대로이므로,
+// 호스트가 아니라 내역에 기록된 학술 DB 이름으로 규칙을 고르고 경로·파라미터에서만 번호를 찾는다.
+// (2026-11 실제 페이지 주소로 확인한 형식)
+//   RISS     …/search/detail/DetailView.do?…&control_no=e3b0c44298fc1c14…
+//   DBpia    …/journal/detail?nodeId=T16810405, …/journal/articleDetail?nodeId=NODE11234567
+//   KCI      …/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART003002677
+//   KOAJ     …/landing/article.kci?arti_id=ART003002677   (KCI와 같은 번호 → 같은 논문)
+//   KISS     …/Detail/Ar?key=4012345
+//   eArticle …/Article/A283769
+//   스콜라    …/article/detail/4010063029533
+const URL_ID_RULES = {
+  RISS: { prefix: 'riss', key: url => url.searchParams.get('control_no') },
+  DBpia: { prefix: 'dbpia', key: url => url.searchParams.get('nodeId') },
+  KCI: { prefix: 'kci', key: url => url.searchParams.get('sereArticleSearchBean.artiId') },
+  KOAJ: { prefix: 'kci', key: url => url.searchParams.get('arti_id') },
+  KISS: { prefix: 'kiss', key: url => url.searchParams.get('key') },
+  eArticle: { prefix: 'earticle', key: url => url.pathname.match(/\/Article\/(\w+)/i)?.[1] },
+  스콜라: { prefix: 'scholar', key: url => url.pathname.match(/\/article\/detail\/(\w+)/i)?.[1] },
+};
 
-function articleKeyFromUrl(rawUrl) {
+function articleKeyFromUrl(rawUrl, academicDB) {
   if (!rawUrl) return '';
   try {
     const url = new URL(rawUrl);
-    const rule = URL_ID_RULES.find(({ pattern }) => pattern.test(url.hostname));
-    const id = rule?.key(url);
+    const rule = URL_ID_RULES[academicDB];
+    const id = rule?.key(url)?.trim();
     if (id) return `${rule.prefix}:${id.toUpperCase()}`;
     url.hash = '';
     return url.href;
@@ -209,7 +219,7 @@ function articleFeatures(entry) {
   const sub = normalizeForMatch(meta.title_sub);
   const year = parseInt(meta.year, 10);
   const features = {
-    urlKey: articleKeyFromUrl(entry.url),
+    urlKey: articleKeyFromUrl(entry.url, entry.academicDB),
     authors: new Set(toArray(meta.authors).map(normalizeForMatch).filter(Boolean)),
     year: Number.isNaN(year) ? null : year,
     kind: String(meta.publisher ?? '').includes('학위논문') ? 'thesis' : meta.journal_name ? 'article' : null,
