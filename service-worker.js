@@ -1,12 +1,3 @@
-chrome.commands.onCommand.addListener(command => {
-  if (command === 'open-extension-popup') {
-    // Manifest V3: action.openPopup()으로 팝업 강제 오픈
-    chrome.action.openPopup().catch(err => {
-      console.error('팝업 열기 실패:', err);
-    });
-  }
-});
-
 // =============================================================================
 // 업데이트 직후 한 번: 서지정보 추출 내역 전체를 현재 기준으로 다시 묶음
 // (같은 논문 판별 기준이 바뀌었을 수 있으므로. 판별 결과는 같은 내역이면 항상 같으므로

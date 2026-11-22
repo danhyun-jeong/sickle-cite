@@ -39,6 +39,17 @@ const state = {
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+// 테마: 'light' | 'dark' | 'auto'(운영체제 설정을 따름). CSS는 <html data-theme>을 보고 색을 정한다.
+// 설정은 chrome.storage에서 비동기로 읽히므로, 팝업이 열릴 때 색이 깜빡이지 않도록
+// 마지막으로 고른 테마를 localStorage에도 적어 두고 가장 먼저 적용한다.
+const THEME_CACHE_KEY = 'sickleCiteTheme';
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem(THEME_CACHE_KEY, theme ?? 'auto'); } catch {}
+}
+try { applyTheme(localStorage.getItem(THEME_CACHE_KEY)); } catch {}
+
 const toArray = value => Array.isArray(value) ? value : (value ? [value] : []);
 const isEmptyValue = value => value == null || value === '' || (Array.isArray(value) && value.length === 0);
 const isMetadataEmpty = meta => !meta || Object.values(meta).every(isEmptyValue);
@@ -334,7 +345,8 @@ const DEFAULT_SETTINGS = {
   angleJournalBrackets: false,         // 『 』 대신 《 》
   pageRange: { include: false, separator: '–', unit: '쪽' },
   // 같은 논문을 다시 추출했을 때: 'keepAll'(매번 내역에 저장) | 'firstOnly'(첫 번째만 저장)
-  duplicateExtraction: 'keepAll'
+  duplicateExtraction: 'keepAll',
+  theme: 'auto'                        // 'light' | 'dark' | 'auto'
 };
 const TITLE_SEPARATORS = { 'dash-space': ' — ', 'dash-nospace': '—', 'colon': ': ' };
 
@@ -461,7 +473,7 @@ function renderVolIssOptions() {
       </div>`;
   let html = '';
   if (mode === 'none') {
-    html = '<p style="color: var(--text-secondary); font-size:13px; margin-top:12px; margin-left: 3px">💡 권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
+    html = '<p class="hint">권/호의 구분이 따로 없을 경우(즉 권/호 둘 중 하나만 있는 경우), 괄호 없이 숫자만 표기됩니다.</p>';
   } else if (mode === 'suffix') {
     html = `
       ${field('volume-suffix', '권수 단위:')}
@@ -506,6 +518,7 @@ function renderSettingsForm() {
   $('input[name="page-range-separator"]').value = s.pageRange.separator;
   $('input[name="page-range-unit"]').value = s.pageRange.unit;
   $(`input[name="duplicate-extraction"][value="${s.duplicateExtraction}"]`).checked = true;
+  $(`input[name="theme"][value="${s.theme}"]`).checked = true;
   $('#delete-duplicates-area').hidden = s.duplicateExtraction !== 'firstOnly';
 }
 
@@ -541,6 +554,7 @@ function readSettingsForm() {
     unit: $('input[name="page-range-unit"]').value || DEFAULT_SETTINGS.pageRange.unit
   };
   next.duplicateExtraction = $('input[name="duplicate-extraction"]:checked')?.value ?? DEFAULT_SETTINGS.duplicateExtraction;
+  next.theme = $('input[name="theme"]:checked')?.value ?? DEFAULT_SETTINGS.theme;
   return next;
 }
 
@@ -553,6 +567,7 @@ function bindSettingsForm() {
     if (modeChanged) renderVolIssOptions();
     syncHalfwidthToggle();
     $('#delete-duplicates-area').hidden = state.settings.duplicateExtraction !== 'firstOnly';
+    applyTheme(state.settings.theme);
     saveSettings();
     renderCitation();
     renderHistory(); // 내역 표의 제목에도 제목 구분자가 들어가므로 갱신
@@ -607,7 +622,7 @@ function formatCitation(meta, style = resolveStyle()) {
     journalPart = journal;
   }
 
-  // 쪽수 범위는 설정이 켜져 있고 첫/끝 페이지가 모두 있을 때만
+  // 쪽 범위는 설정이 켜져 있고 첫/끝 페이지가 모두 있을 때만
   const pageRange = style.pageRangeInclude && meta.page_first && meta.page_last
     ? `, ${meta.page_first}${style.pageRangeSeparator}${meta.page_last}${style.pageRangeUnit}`
     : '';
@@ -1826,6 +1841,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 설정을 먼저 불러온 뒤(인용 표기 조합에 필요) 내역 표시 → 현재 페이지 추출
   state.settings = await loadSettings();
+  applyTheme(state.settings.theme);
   renderSettingsForm();
   // 업데이트 직후 전체 내역을 다시 묶는 일은 백그라운드(service-worker.js)가 맡는다.
   // 그 작업이 끝나기 전에 팝업이 열렸거나 묶음 번호가 빠진 항목이 있으면 여기서 붙여 줌

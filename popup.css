@@ -1,13 +1,23 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable.css');
 :root {
+    color-scheme: light dark;
     --accent: #5174a5;
+    --accent-hover: #43648f;
+    --on-accent: #ffffff;              /* 포인트 색 바탕 위 글자 */
+    --accent-soft: #e9eff8;            /* 태그 칩 등 옅은 포인트 바탕 */
+    --accent-soft-border: #d4dff0;
     --bg: #ffffff;
     --bg-alt: #f8f9fa;
+    --bg-secondary: #f1f3f4;
     --text: #202124;
     --text-secondary: #5f6368;
     --text-muted: #bdc0c3;
     --border: #cfd1d6;
-    --radius: 6px;
+    --hover: rgba(0, 0, 0, 0.04);
+    --shadow: rgba(0, 0, 0, 0.15);
+    --track: #cccccc;                  /* 꺼진 토글 스위치 */
+    --radius: 8px;                     /* 입력칸 */
+    --radius-card: 12px;               /* 카드 */
     --spacing: 12px;
     --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
@@ -22,6 +32,85 @@ body {
 }
 input, textarea, select, button {
     font-family: var(--font);
+}
+input, textarea, select {
+    background-color: var(--bg);
+    color: var(--text);
+}
+
+/* 어두운 색: 테마가 '어두운 테마'이거나, '자동'이면서 운영체제가 어두운 모드일 때 */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --accent: #8aa9d6;
+        --accent-hover: #a3bce0;
+        --on-accent: #10151d;
+        --accent-soft: rgba(138, 169, 214, 0.16);
+        --accent-soft-border: rgba(138, 169, 214, 0.35);
+        --bg: #25272b;
+        --bg-alt: #1b1c1f;
+        --bg-secondary: #2f3136;
+        --text: #e8eaed;
+        --text-secondary: #a8adb4;
+        --text-muted: #62666d;
+        --border: #3d4046;
+        --hover: rgba(255, 255, 255, 0.06);
+        --shadow: rgba(0, 0, 0, 0.5);
+        --track: #4a4d53;
+    }
+}
+:root[data-theme="dark"] {
+    --accent: #8aa9d6;
+    --accent-hover: #a3bce0;
+    --on-accent: #10151d;
+    --accent-soft: rgba(138, 169, 214, 0.16);
+    --accent-soft-border: rgba(138, 169, 214, 0.35);
+    --bg: #25272b;
+    --bg-alt: #1b1c1f;
+    --bg-secondary: #2f3136;
+    --text: #e8eaed;
+    --text-secondary: #a8adb4;
+    --text-muted: #62666d;
+    --border: #3d4046;
+    --hover: rgba(255, 255, 255, 0.06);
+    --shadow: rgba(0, 0, 0, 0.5);
+    --track: #4a4d53;
+}
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+/* 단색 선 아이콘 (이모지 대신) */
+.icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* 안내문: 앞에 작은 ⓘ 아이콘, 둘째 줄부터 아이콘 너비만큼 들여쓰기 */
+.hint {
+    position: relative;
+    padding-left: 19px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.hint::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.22em;
+    width: 13px;
+    height: 13px;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .tabs {
     display: flex;
@@ -44,10 +133,14 @@ input, textarea, select, button {
     white-space: nowrap;
     cursor: pointer;
     transition: color 0.2s, background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 .tabs button:hover {
     color: var(--text);
-    background: rgba(0, 0, 0, 0.035);
+    background: var(--hover);
 }
 /* 선택 표시: 아래 경계선 위에 끝이 둥근 막대 */
 .tabs button::after {
@@ -84,14 +177,14 @@ input, textarea, select, button {
     padding: var(--spacing);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     overflow-y: auto;
 }
 .pane-section {
     flex: 0;
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     padding: var(--spacing);
     margin-bottom: var(--spacing);
 }
@@ -151,6 +244,34 @@ input, textarea, select, button {
 #tab1 .left-pane .field textarea:not(.abstract-input) {
     min-height: 27px;
 }
+#tab1 .left-pane .field textarea {
+    resize: none;
+}
+#tab1 .left-pane .field-row input {
+    min-width: 0;
+}
+/* 권호수: [    ] 권   [    ] 호 — 두 칸을 같은 너비로 반씩 나누고, '호' 글자 오른쪽 끝을 위아래 입력칸 끝에 맞춤 */
+#tab1 .left-pane .field-halves .half {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+#tab1 .left-pane .field-halves .half + .half {
+    margin-left: 14px;
+}
+#tab1 .left-pane .field-halves .unit {
+    margin-left: 6px;
+    font-size: 14px;
+    color: var(--text);
+}
+#tab1 .left-pane .field-halves .half input {
+    min-width: 0;
+}
+#tab1 .left-pane .field-row .range-sep {
+    margin: 0 6px;
+    color: var(--text-secondary);
+}
 .field label {
     font-size: 14px;
     color: var(--text-secondary);
@@ -195,7 +316,7 @@ textarea:focus,
     color: var(--accent);
     background: none;
     border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
 }
@@ -204,10 +325,10 @@ textarea:focus,
 #save-metadata-btn:hover,
 #copy-citation-btn:hover {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 #tab1 h3 {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text);
     margin-top: 5px;
@@ -215,7 +336,13 @@ textarea:focus,
 }
 
 #tab1 .pane h3 {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+#tab1 .pane h3 .icon {
+    color: var(--accent);
 }
 
 #tab1 .actions {
@@ -224,18 +351,22 @@ textarea:focus,
 }
 
 #tab1 .tags-container p {
-    font-size: 13px;
-    color: var(--text-secondary);
     margin-top: 10px;
     margin-bottom: 0;
 }
 
 /* 설정 탭: 상위 항목(인용 표기 커스텀 / 프로그램 설정) */
+#tab3 .settings-group {
+    padding: 16px 18px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+}
 #tab3 .settings-group + .settings-group {
-    margin-top: calc(var(--spacing)*3);
+    margin-top: calc(var(--spacing)*1.5);
 }
 #tab3 h3 {
-    font-size: 19px;
+    font-size: 16px;
     font-weight: 700;
     color: var(--text);
     margin: 0;
@@ -243,7 +374,7 @@ textarea:focus,
     border-bottom: 1px solid var(--border);
 }
 #tab3 h4 {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text);
     margin-bottom: calc(var(--spacing)*1.5);
@@ -322,7 +453,7 @@ table td {
 }
 
 .clear-search-btn:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--hover);
 }
 
 .clear-search-btn svg {
@@ -352,15 +483,12 @@ table td {
     text-indent: -16px;
 }
 #tab3 .section {
-    margin-top: calc(var(--spacing)*2.5);
+    margin-top: calc(var(--spacing)*2);
     padding-bottom: calc(var(--spacing)/2);
 }
 #tab3 #vol-iss-options p {
-    margin-top:12px; 
+    margin-top: 12px;
     margin-bottom: 4px;
-    margin-left: 3px;
-    color: var(--text-secondary);
-    font-size:13px; 
 }
 #tab3 .field {
     display: flex;
@@ -412,7 +540,6 @@ table td {
     align-items: center;
     color: var(--text-secondary);
     cursor: pointer;
-    min-width: 150px;
 }
 
 .tab-content.active {
@@ -447,13 +574,13 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 #tab2 th:nth-child(2),
 #tab2 td:nth-child(2) { width: 50px !important; }   /* 저자 열 너비 */
 #tab2 th:nth-child(3),
-#tab2 td:nth-child(3) { width: 45%; }   /* 논문 제목 열 너비 */
+#tab2 td:nth-child(3) { width: 41%; }   /* 논문 제목 열 너비 */
 #tab2 th:nth-child(4),
 #tab2 td:nth-child(4) { width: 14%; }   /* 태그 열 너비 */
 #tab2 th:nth-child(5),
 #tab2 td:nth-child(5) { width: 8%; }   /* 학술 DB 열 너비 */
 #tab2 th:nth-child(6),
-#tab2 td:nth-child(6) { width: 11%; }   /* 시간 열 너비 */
+#tab2 td:nth-child(6) { width: 15%; }   /* 시간 열 너비 */
 
 /* hide-5-6-columns가 활성화되었을 때의 열 너비 재조정 */
 #tab2.hide-columns th:nth-child(3),
@@ -483,7 +610,8 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 }
 
 #tab2 td:nth-child(6) {
-    font-size: 9px;
+    font-size: 12px;
+    white-space: nowrap;
     color: var(--text-secondary);
 }
 
@@ -516,13 +644,13 @@ input[name="title-brackets"], input[name="journal-brackets"] {
     color: var(--accent);
     background: none;
     border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 4px 10px;
 }
 #tab2 .toggle-switch-area button svg {
     width: 14px;
@@ -531,7 +659,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 }
 #tab2 .toggle-switch-area button:hover {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 .modal {
     position: fixed;
@@ -545,30 +673,32 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 }
 
 .modal-content {
-background: #fff;
-padding: 20px 30px;
-border-radius: 8px;
-text-align: center;
-border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px 30px;
+    border-radius: var(--radius-card);
+    text-align: center;
+    border: 1px solid var(--border);
 }
 .modal-content p {
     margin-bottom: 20px;
+    font-size: 14px;
 }
 .modal-content button {
     justify-content: flex-start;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--accent);
     background: none;
     border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
     margin: 0 8px;
-    padding: 4px 10px;
+    padding: 4px 12px;
 }
 .modal-content button:hover {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 
 .modal-content h3 {
@@ -639,7 +769,7 @@ border: 1px solid var(--border);
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #ccc;
+    background-color: var(--track);
     transition: .3s;
     border-radius: 16px;
 }
@@ -774,11 +904,11 @@ input[type="radio"]:checked::before {
     display: inline-flex;
     align-items: center;
     padding: 4px 8px;
-    background-color: #e9eff8;
+    background-color: var(--accent-soft);
     color: var(--accent);
     border-radius: 20px;
     font-size: 13px;
-    border: 1px solid #d4dff0;
+    border: 1px solid var(--accent-soft-border);
     user-select: none;
 }
 
@@ -800,7 +930,7 @@ input[type="radio"]:checked::before {
 }
 
 .tag-remove:hover {
-    background-color: rgba(81, 116, 165, 0.2);
+    background-color: var(--accent-soft-border);
 }
 
 /* 태그 입력 UI 스타일 */
@@ -833,9 +963,9 @@ input[type="radio"]:checked::before {
 .tag-list li {
     display: inline-flex;
     align-items: center;
-    background-color: #e9eff8;
+    background-color: var(--accent-soft);
     color: var(--accent);
-    border: 1px solid #d4dff0;
+    border: 1px solid var(--accent-soft-border);
     border-radius: 20px;
     font-size: 12px;
     padding: 4px 8px;
@@ -856,7 +986,7 @@ input[type="radio"]:checked::before {
     }
 
 .tag-list li .remove-tag:hover {
-    background-color: rgba(81, 116, 165, 0.15);
+    background-color: var(--accent-soft-border);
 }
 
 #tags-input {
@@ -873,11 +1003,11 @@ input[type="radio"]:checked::before {
 /* 탭2 히스토리 테이블 안에서 태그 칩 스타일 */
 .history-tag-chip {
     display: inline-block;
-    background-color: #e9eff8;
+    background-color: var(--accent-soft);
     color: var(--accent);
-    border: 1px solid #d4dff0;
+    border: 1px solid var(--accent-soft-border);
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 12px;
     padding: 1px 5px;
     margin-right: 4px;
     white-space: nowrap;
@@ -888,8 +1018,8 @@ input[type="radio"]:checked::before {
     position: absolute;
     top: -4px;
     right: -4px;
-    background-color: #4a75a8e0;
-    color: #fff;
+    background-color: var(--accent);
+    color: var(--on-accent);
     border-radius: 50%;
     font-size: 8px;
     padding: 2px;
@@ -965,7 +1095,7 @@ input[type="radio"]:checked::before {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 6px var(--shadow);
     overflow-y: auto;
     margin: 0 0 0 0;
     padding: 0;
@@ -992,7 +1122,7 @@ input[type="radio"]:checked::before {
 
 .autocomplete-list li:hover,
 .autocomplete-list li.active {
-  background-color: #e9eff8;
+  background-color: var(--accent-soft);
 }
 
 /* 체크박스 공통 스타일 */
@@ -1007,7 +1137,7 @@ input[type="radio"]:checked::before {
   -webkit-appearance: none;
   -moz-appearance: none;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 4px;
   background-color: var(--bg);
   position: relative;
 }
@@ -1022,7 +1152,7 @@ input[type="radio"]:checked::before {
 #select-all:checked::before {
   content: "✓";
   position: absolute;
-  color: var(--bg);
+  color: var(--on-accent);
   font-size: 10px;
   top: 55%;
   left: 50%;
@@ -1032,15 +1162,15 @@ input[type="radio"]:checked::before {
 /* indeterminate 상태 (일부만 선택된 상태) */
 #history-list input[type="checkbox"]:indeterminate,
 #select-all:indeterminate {
-  background-color: rgba(81, 116, 165, 0.6); /* --accent의 60% 투명도 */
-  border-color: rgba(81, 116, 165, 0.6);
+  background-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
 #history-list input[type="checkbox"]:indeterminate::before,
 #select-all:indeterminate::before {
   content: "－";
   position: absolute;
-  color: var(--bg);
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: bold;
   top: 50%;
@@ -1060,11 +1190,11 @@ input[type="radio"]:checked::before {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: 999px;
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
   font-size: 12px;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -1104,11 +1234,11 @@ input[type="radio"]:checked::before {
 
 /* 버튼들 간격 조정 */
 #copy-citations-selected {
-  left: 70px;
+  left: 74px;
 }
 
 #export-bibliography-selected {
-  left: 190px;
+  left: 198px;
 }
 
 /* 모달 스타일 */
@@ -1143,7 +1273,7 @@ input[type="radio"]:checked::before {
 
 #delete-selected-confirm button:hover {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 
 #delete-selected-confirm .button-group {
@@ -1166,11 +1296,12 @@ input[type="radio"]:checked::before {
   gap: 3px;
   margin-left: auto;
   align-items: flex-end;
+  font-size: 12px;
 }
 
 .citation-example {
     padding: 10px 15px;
-    background-color: #ededed;
+    background-color: var(--bg-secondary);
     border-radius: var(--radius);
     margin: 15px 0;
     font-size: 14px;
@@ -1208,7 +1339,7 @@ input[type="radio"]:checked::before {
 
 .export-option-button:hover {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 
 .export-description {
@@ -1265,16 +1396,16 @@ input[type="radio"]:checked::before {
     color: var(--accent);
     background: none;
     border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    border-radius: 999px;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
-    padding: 4px 8px;
+    padding: 4px 12px;
 }
 #history-list .history-more button:hover,
 #tab3 #delete-duplicates-btn:hover,
 #tab3 .backup-buttons button:hover {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 #tab3 #delete-duplicates-area {
     margin-top: 10px;
@@ -1293,15 +1424,6 @@ input[type="radio"]:checked::before {
     margin-top: 10px;
 }
 
-/* 설정 탭의 💡 설명문: 둘째 줄부터 '💡 ' 너비만큼 들여쓰기 */
-#tab3 .instructions p,
-#tab3 #vol-iss-options p {
-    padding-left: var(--bulb-indent);
-    text-indent: calc(-1 * var(--bulb-indent));
-}
-#tab3 {
-    --bulb-indent: 1.25em; /* 13px 글씨에서 '💡 '의 실제 너비 */
-}
 
 /* 설정 탭: 다른 설정 때문에 쓸 수 없는 토글은 흐리게 */
 #tab3 .checkbox-label:has(input:disabled),
@@ -1331,8 +1453,8 @@ input[type="radio"]:checked::before {
     color: var(--text);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    box-shadow: 0 2px 6px var(--shadow);
     white-space: pre-wrap;
     word-break: keep-all; /* 한국어는 어절 단위로 줄바꿈 */
     overflow-wrap: anywhere;
@@ -1409,7 +1531,7 @@ input[type="radio"]:checked::before {
     border-left: 1px solid var(--border);
 }
 .type-filter button.active {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--accent);
 }
 .type-filter > button.active {
@@ -1435,4 +1557,25 @@ input[type="radio"]:checked::before {
 }
 #reset-filters:hover {
     text-decoration: underline;
+}
+
+/* 주 버튼: 화면에서 가장 많이 쓰는 동작 하나만 꽉 찬 포인트 색으로 */
+#tab1 #copy-citation-btn.primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-accent);
+    background: var(--accent);
+    border-color: var(--accent);
+}
+#tab1 #copy-citation-btn.primary-btn:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+#tab1 #copy-citation-btn.primary-btn .icon {
+    width: 15px;
+    height: 15px;
 }

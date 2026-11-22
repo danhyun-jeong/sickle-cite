@@ -10,19 +10,17 @@
     "storage",
     "activeTab",
     "scripting",
-    "commands",
     "unlimitedStorage"
   ],
   "background": {
     "service_worker": "service-worker.js"
   },
   "commands":{
-    "open-extension-popup": {
+    "_execute_action": {
       "suggested_key": {
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
-      },
-      "description": "현재 페이지에서 팝업 창 열기 = 현재 페이지에서 논문 서지사항 추출하기"
+      }
     }
   },
   "action": {
