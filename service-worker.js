@@ -10,7 +10,16 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
     const { history = [] } = await chrome.storage.local.get('history');
     if (history.length) {
       assignArticleIds(history, { regroup: true });
-      await chrome.storage.local.set({ history });
+      // 이전 버전에서 저장된 키워드에도 '한국어 키워드 우선' 규칙을 한 번만 적용
+      const { keywordRuleApplied } = await chrome.storage.local.get('keywordRuleApplied');
+      if (!keywordRuleApplied) {
+        for (const item of history) {
+          if (!Array.isArray(item.metadata?.keywords)) continue;
+          const picked = pickKeywords(item.metadata.keywords);
+          item.metadata.keywords = picked.length === 1 ? picked[0] : picked;
+        }
+      }
+      await chrome.storage.local.set({ history, keywordRuleApplied: true });
     }
     // 1.8 개발 중에 잠시 쓰였던 표시값 정리
     await chrome.storage.local.remove('articleGroupingVersion');
@@ -18,6 +27,17 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
     console.error('내역 다시 묶기 실패:', err);
   }
 });
+
+// content_script.js의 pickKeywords와 같은 규칙: 한국어 키워드(와 두문자어)가 있으면 그것만
+function pickKeywords(list) {
+  const all = [...new Set(list
+    .filter(k => typeof k === 'string')
+    .map(k => k.replace(/\s+/g, ' ').trim())
+    .filter(Boolean))];
+  const isKorean = k => /[가-힣]/.test(k);
+  const isAcronym = k => /^[A-Z]{2,}$/.test(k);
+  return all.some(isKorean) ? all.filter(k => isKorean(k) || isAcronym(k)) : all;
+}
 
 // ----- 같은 논문 판별 (popup.js '1-1. 같은 논문 판별'과 같은 코드. 고칠 때 함께 고칠 것) -----
 
@@ -38,6 +58,7 @@ const normalizeForMatch = text => String(text ?? '').normalize('NFC').toLowerCas
 //   KISS     …/Detail/Ar?key=4012345
 //   eArticle …/Article/A283769
 //   스콜라    …/article/detail/4010063029533
+//   연세대   library.yonsei.ac.kr/search/detail/CATTOT000002162902, …/eds/detail/edskst_edskst.article.57253
 const URL_ID_RULES = {
   RISS: { prefix: 'riss', key: url => url.searchParams.get('control_no') },
   DBpia: { prefix: 'dbpia', key: url => url.searchParams.get('nodeId') },
@@ -46,6 +67,7 @@ const URL_ID_RULES = {
   KISS: { prefix: 'kiss', key: url => url.searchParams.get('key') },
   eArticle: { prefix: 'earticle', key: url => url.pathname.match(/\/Article\/(\w+)/i)?.[1] },
   스콜라: { prefix: 'scholar', key: url => url.pathname.match(/\/article\/detail\/(\w+)/i)?.[1] },
+  '연세대': { prefix: 'yonsei', key: url => url.pathname.match(/\/detail\/([^/]+)/)?.[1] },
 };
 
 function articleKeyFromUrl(rawUrl, academicDB) {

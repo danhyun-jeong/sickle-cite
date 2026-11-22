@@ -31,6 +31,8 @@ function getAcademicDBType() {
     return 'eArticle';
   if (/scholar.*kyobobook/.test(host) && path.startsWith('/article/detail/'))
     return '스콜라';
+  if (host === 'library.yonsei.ac.kr' && /^\/(search|eds)\/detail\//.test(path))
+    return '연세대';
   console.log('‼️ 현재 페이지를 인식할 수 없습니다.');
 }
 
@@ -147,6 +149,19 @@ function pickKeywords(list) {
   return all.some(isKorean) ? all.filter(k => isKorean(k) || isAcronym(k)) : all;
 }
 
+// 학술지명·기관명에 영문 명칭이 이어 붙은 경우 국문 명칭만 (국문 명칭이 있을 때)
+//   '비교한국학 Comparative Korean Studies' → '비교한국학'
+//   'Comparative Korean Studies 비교한국학' → '비교한국학'
+//   '초등교육연구(EER)' → '초등교육연구'   (한글이 없는 괄호는 약어·영문 병기로 보고 뺌)
+//   괄호 밖 영문은 두 단어 이상일 때만 떼어 냄: 'E²M-전기 전자와 첨단 소재', '한국 SNS 연구' 등은 그대로
+function dropEnglishName(name) {
+  if (!/[가-힣]/.test(name)) return name;
+  const english = String.raw`[A-Za-z][A-Za-z'’.&-]*(?:[\s,:]+[A-Za-z(][A-Za-z'’.&()-]*)+`;
+  return collapse(removeNonKoreanParen(name)
+    .replace(new RegExp(String.raw`(?:\s+|\s*[(\[]\s*)${english}\s*[)\]]?$`), '')
+    .replace(new RegExp(String.raw`^${english}\s+(?=[가-힣])`), ''));
+}
+
 function verifyMetadata(raw) {
   // volume 또는 issue 값이 0(숫자)이거나 '0'(스트링)일 경우, 빈 값으로 통일
   let volume = raw.volume || '';
@@ -158,10 +173,10 @@ function verifyMetadata(raw) {
     authors:      raw.authors       || [],
     title_main:   raw.title_main    || '',
     title_sub:    raw.title_sub     || '',
-    journal_name: raw.journal_name  || '',
+    journal_name: dropEnglishName(raw.journal_name || ''),
     volume:       volume,
     issue:        issue,
-    publisher:    raw.publisher     || '',
+    publisher:    dropEnglishName(raw.publisher || ''),
     year:         raw.year          || '',
     page_first:   raw.page_first    || '',
     page_last:    raw.page_last     || '',
@@ -184,6 +199,37 @@ function verifyMetadata(raw) {
     }
   }
   return metadata;
+}
+
+// 학위논문사항(RISS, 연세대 도서관 등): '학위논문(박사) -- 연세대학교 대학원, 국어국문학과 …' → '연세대학교 국어국문학과 박사학위논문'
+function formatThesisInfo(thesisInfo) {
+  // 1. "--"를 기준으로 앞/뒤 분리
+  const [degreePart = '', restPart = ''] = thesisInfo.split('--').map(s => s.trim());
+  // 1-1. degreePart에서 괄호 안의 학위 종류 추출 (괄호가 없으면 원본 앞부분 그대로)
+  const degreeLabel = degreePart.match(/\(([^)]+)\)/)?.[1] ?? '';
+  const degreeType = degreeLabel
+    ? `${degreeLabel}학위논문`
+    : degreePart.replace(/\s*\(.*\)\s*/, '');
+  // 2. restPart에서 institute와 department 추출
+  const restFields = restPart.split(',').map(s => collapse(s));
+  let institute = restFields[0] || '';
+  // 2-1. '대학교 대학원' 처리: 공백 앞뒤로 세분화
+  if (institute.includes(' ')) {
+    const [pre, post] = institute.split(' ');
+    if (pre.includes('대학교') && (post === '대학원' || post === '일반대학원')) {
+      institute = pre;
+    }
+  }
+  // 3. department: '학과' 포함 시 공백 앞 텍스트만 사용
+  let department = restFields[1] || '';
+  if (department.includes(' ')) {
+    const [pre] = department.split(' ');
+    if (pre.includes('학과')) {
+      department = pre;
+    }
+  }
+  // 4. 조합
+  return `${institute} ${department} ${degreeType}`.trim();
 }
 
 // ----- RISS 페이지 처리 함수: RISS 사이트의 DOM에서 메타데이터 추출 -----
@@ -271,36 +317,6 @@ function parseRISS() {
     });
   }
 
-  // 학위논문: '학위논문(박사) -- 연세대학교 대학원, 국어국문학과 …' → '연세대학교 국어국문학과 박사학위논문'
-  function formatThesisInfo(thesisInfo) {
-    // 1. "--"를 기준으로 앞/뒤 분리
-    const [degreePart = '', restPart = ''] = thesisInfo.split('--').map(s => s.trim());
-    // 1-1. degreePart에서 괄호 안의 학위 종류 추출 (괄호가 없으면 원본 앞부분 그대로)
-    const degreeLabel = degreePart.match(/\(([^)]+)\)/)?.[1] ?? '';
-    const degreeType = degreeLabel
-      ? `${degreeLabel}학위논문`
-      : degreePart.replace(/\s*\(.*\)\s*/, '');
-    // 2. restPart에서 institute와 department 추출
-    const restFields = restPart.split(',').map(s => collapse(s));
-    let institute = restFields[0] || '';
-    // 2-1. '대학교 대학원' 처리: 공백 앞뒤로 세분화
-    if (institute.includes(' ')) {
-      const [pre, post] = institute.split(' ');
-      if (pre.includes('대학교') && (post === '대학원' || post === '일반대학원')) {
-        institute = pre;
-      }
-    }
-    // 3. department: '학과' 포함 시 공백 앞 텍스트만 사용
-    let department = restFields[1] || '';
-    if (department.includes(' ')) {
-      const [pre] = department.split(' ');
-      if (pre.includes('학과')) {
-        department = pre;
-      }
-    }
-    // 4. 조합
-    return `${institute} ${department} ${degreeType}`.trim();
-  }
   return verifyMetadata({
     authors: tmp.authors,
     title_main: main,
@@ -768,6 +784,187 @@ function parseKOAJ() {
   return verifyMetadata(rawMetadata);
 }
 
+//----- 연세대학교 도서관: 소장자료 상세 페이지(/search/detail/…) -----
+// 상세정보 표(table#moreInfo)의 각 행 'th: 항목명 / td: 값'에서 추출 (2026-11 기준)
+//   서명/저자사항  개발독재 체제의 '조국 근대화'와 남성성 : 황석영, 최인호의 중단편 소설을 중심으로 / 정재훈
+//   개인저자       <a>정재훈</a>
+//   발행사항       서울 : 연세대학교 대학원, 2023
+//   학위논문주기   학위논문(석사) --연세대학교 대학원,국어국문학과,2023.8
+//   비통제주제어   <a>남성성</a>,<a>개발독재</a>,…,<a>masculinity</a>,…
+function parseYonseiCatalog() {
+  const rows = new Map([...document.querySelectorAll('#moreInfo tr')]
+    .map(tr => [collapse(tr.querySelector('th')?.textContent ?? ''), tr.querySelector('td')]));
+  const text = label => collapse(fixTypography(rows.get(label)?.textContent ?? ''));
+  const links = label => [...(rows.get(label)?.querySelectorAll('a') ?? [])]
+    .map(a => collapse(fixTypography(a.textContent)));
+
+  // 제목: '본제목 : 부제목 / 저자사항'에서 ' / ' 앞부분
+  const statement = text('서명/저자사항');
+  const slash = statement.lastIndexOf(' / ');
+  const { main, sub } = splitTitle(slash >= 0 ? statement.slice(0, slash) : statement);
+
+  // 저자: '개인저자' 링크 (생몰년 '홍길동, 1970-' 등은 떼어 냄). 없으면 저자사항에서
+  let authors = links('개인저자').map(a => collapse(removeNonKoreanParen(a.replace(/,?\s*\d{4}-(\d{4})?\.?$/, ''))));
+  if (!authors.length && slash >= 0) authors = statement.slice(slash + 3).split(/[,，]/).map(collapse);
+
+  // 발행사항: '발행지 : 발행처, 연도'
+  const imprint = text('발행사항');
+  const year = imprint.match(/\d{4}/)?.[0] ?? text('학위논문주기').match(/\d{4}/)?.[0] ?? '';
+  const thesisInfo = text('학위논문주기');
+  const publisher = thesisInfo
+    ? formatThesisInfo(thesisInfo)
+    : collapse(imprint.replace(/^[^:]*:/, '').replace(/,\s*[^,]*\d{4}.*$/, ''));
+
+  // 키워드: 주제어 행들의 링크 (한국어/외국어 선별은 pickKeywords에서)
+  const keywords = [...rows.keys()].filter(label => label.includes('주제')).flatMap(links);
+  // 초록: 초록(요약) 행이 있는 자료만
+  const abstractLabel = [...rows.keys()].find(label => /초록|요약/.test(label));
+
+  return verifyMetadata({
+    authors,
+    title_main: main,
+    title_sub: sub,
+    publisher,
+    year,
+    keywords,
+    abstract: abstractLabel ? text(abstractLabel) : ''
+  });
+}
+
+//----- 연세대학교 도서관: 학술논문 검색(EDS) 상세 페이지(/eds/detail/…) -----
+// 로그인해야 열림. 제목·학술지 정보는 .profileHeader, 나머지는 table#moreInfo 행에서 추출 (2026-11 기준)
+//   h3   국문 제목<br>영문 제목   또는   국문 제목 / 영문 제목
+//   p    학술지 논문만. 학술지명·권·호·쪽 (형식은 아래 parseEDSSource 참고)
+//   저자                 <a><searchlink>정재훈</searchlink> (연세대학교)</a>, 학위논문은 '정재훈 / Jaehoon Jeong'
+//   단체 / Degree        연세대학교 / 일반대학원 국어국문학과, 현대문학전공, Dissertation   (학위논문만)
+//   Publisher Information 한국여성문학학회, The Academy Society of …, 2025.
+//   Publication Year     2025
+//   주제어 / 초록         주제어는 링크 목록, 초록은 국문<br>영문
+// EDS 제목 아래 줄(학술지 정보) 풀이. 자료 제공처마다 형식이 제각각이라(2026-11 실제 사례),
+//   DBpia     <i>현대소설연구</i>. 2025-12 (100):201-244   /  <i>한국여성학</i>. 2026-09 42(3):103-137
+//   KISS      <i>민족문학사연구 / Journal of Korean Literary History</i>. Dec 31, 2025 89:367  (시작 쪽만)
+//   AccessOn  <i>여성문학연구, Feminism and Korean Literature</i>. 2025-08-01 0(65):110-139
+//   KCI       한국여성학, 40(4), pp.53-57 Dec, 2024   /  행정판례연구, 22(2), 2, pp.169-208 Dec, 2017 (뒤 2는 통권)
+//   스콜라    여성학논집 42. 1 (2025): 3-71.   /  여성연구 127 (2025): 57-78.
+//   기타      지속가능경영융합(구 아유르베다 융합 연구) 제18권 4호 p. 57-69
+//             한국이민정책학보, 12/31/2025, Vol. 8, Issue 3, p. 45-62   (eArticle)
+//   Atla      <searchlink>신약연구</searchlink>, 83 no 3 Jun 2026, p 525-559  /  …, 229 2025, p 72-120
+//   EBSCO     <searchlink>Journal of …</searchlink>. Apr2025, Vol. 30 Issue 2, p124-130. 7p.
+//   스콜라    융합영어영문학(구.English Reading and Teaching) 10. 1 (2025): 231-258.   ('(구 …)' 옛 이름은 뺌)
+// 형식을 하나하나 맞추는 대신, 확실한 것부터 지워 나간다:
+//   ① 학술지명(<i>·<searchlink> 안, 없으면 첫 숫자 앞) → ② 날짜·연도(표의 발행연도 이용) → ③ 쪽(맨 뒤) → ④ 남은 것에서 권·호
+function parseEDSSource(p, year) {
+  const source = collapse(p?.textContent ?? '');
+  const italic = p?.querySelector('i, searchlink')?.textContent;
+
+  // ① 학술지명: 국문·영문 병기('A / B', 'A, B')면 한글이 든 쪽. '(구 옛 이름)'은 뺌
+  // (학술지명 없이 '7. 3 (2025): 179-203.'처럼 숫자로 시작하면 학술지명은 비움)
+  const rawJournal = italic
+    ? collapse(italic)
+    : /^\d/.test(source) ? '' : source.split(/[,.]?\s+(?=제\s*\d|\d|vol\.|\(\d)/i)[0];
+  //   (쉼표는 학술지명 안에도 쓰이므로 'Journal of Physical, Multiple …', 한글이 든 쪽을 고를 때만 나눔)
+  const parts = rawJournal.split(/\s+[\/=]\s+|\s*,\s*/);
+  const journal = collapse((parts.find(t => /[가-힣]/.test(t)) ?? rawJournal.split(/\s+[\/=]\s+/)[0] ?? '')
+    .replace(/\(구[\s.][^)]*\)/g, '').replace(/[.,\s]+$/, ''));
+  let rest = ` ${italic ? source.replace(collapse(italic), '') : source.slice(rawJournal.length)} `;
+
+  // ② 날짜: 2025-12, 2025-08-01, Dec 31, 2025, Dec, 2024, Apr2025, 12/31/2025, (2025), 그리고 발행연도 숫자
+  rest = rest
+    .replace(/\d{4}-\d{1,2}(-\d{1,2})?/g, ' ')
+    .replace(/\b(?!(?:Vol|No|Issue)\b)[A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4}/g, ' ')
+    .replace(/\b(?!(?:Vol|No|Issue)\b)[A-Z][a-z]{2,8}\.?,?\s*\d{4}/g, ' ')
+    .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, ' ')
+    .replace(/\(\s*\d{4}\s*\)/g, ' ');
+  if (year) rest = rest.replace(new RegExp(`(?<!\\d)${year}(?!\\d)`, 'g'), ' ');
+
+  // ③ 쪽: 'pp.189-214', 'p. 57-69', 'p 525-559', 'p124-130', ':201-244', ':367'(시작 쪽만) 중 맨 뒤의 것
+  let pageFirst = '', pageLast = '';
+  const pageMatches = [...rest.matchAll(/(?:\bpp?\.?\s*|:\s*)(\d+)(?:\s*[-–~]\s*(\d+))?/gi)];
+  const pageMatch = pageMatches.at(-1);
+  if (pageMatch) {
+    [, pageFirst, pageLast = ''] = pageMatch;
+    rest = rest.slice(0, pageMatch.index) + ' ' + rest.slice(pageMatch.index + pageMatch[0].length);
+  }
+
+  // ④ 권·호: 먼저 맞는 형식 하나만 (그 뒤의 통권 번호 등은 무시)
+  let volume = '', issue = '';
+  const m =
+    rest.match(/vol\.?\s*(\d+)(?:\D+?(?:no|issue)\.?\s*(\d+))?/i) ??
+    rest.match(/(?:제\s*)?(\d+)\s*권(?:\D*?(?:제\s*)?(\d+)\s*호)?/) ??
+    rest.match(/()(?:제\s*)?(\d+)\s*호/) ??
+    rest.match(/(\d+)\s+no\.?\s*(\d+)/i) ??
+    rest.match(/(\d*)\s*\(\s*[^()\d]*(\d+)\s*\)/) ??   // 42(3), (100), 46(특별호1)
+    rest.match(/(\d+)\.\s+(\d+)/);
+  if (m) [, volume = '', issue = ''] = m;
+  else issue = rest.match(/\d+/)?.[0] ?? '';   // 숫자 하나뿐이면 호수로 (권·호 구분 없음)
+  // DBpia '2016(4)'처럼 발행연도를 권 자리에 적은 경우는 권으로 보지 않음
+  if (volume && volume === year) volume = '';
+
+  return { journal, volume, issue, pageFirst, pageLast };
+}
+
+function parseYonseiEDS() {
+  const rows = new Map([...document.querySelectorAll('#moreInfo tr')]
+    .map(tr => [collapse(tr.querySelector('th')?.textContent ?? ''), tr.querySelector('td')]));
+  const text = label => collapse(fixTypography(rows.get(label)?.textContent ?? ''));
+  const hasKorean = t => /[가-힣]/.test(t);
+  // <br>로 나뉜 줄들
+  const lines = el => (el?.innerHTML ?? '').split(/<br\s*\/?>/i)
+    .map(html => collapse(new DOMParser().parseFromString(html, 'text/html').body.textContent));
+  // 'A, B, C' 중 한글이 든 첫 부분 (없으면 첫 부분)
+  const koreanPart = t => { const parts = t.split(/\s*,\s*/); return parts.find(hasKorean) ?? parts[0] ?? ''; };
+
+  // 제목: 국문·영문 제목이 <br> 또는 ' / '로 이어져 있음 → 한글이 든 쪽
+  const header = document.querySelector('.profileHeader');
+  const titles = lines(header?.querySelector('h3')).flatMap(t => t.split(' / '));
+  const { main, sub } = splitTitle(fixTypography(titles.find(hasKorean) ?? titles[0] ?? ''));
+
+  // 저자: 링크마다 첫 이름 (영문 병기·소속 괄호 제외)
+  const authors = [...(rows.get('저자')?.querySelectorAll('a') ?? [])]
+    .map(a => a.querySelector('searchlink')?.textContent ?? a.textContent.split(' / ')[0])
+    .map(name => collapse(removeNonKoreanParen(fixTypography(name).replace(/\([^)]*\)/g, ''))))
+    .filter(Boolean);
+
+  const year = text('Publication Year').match(/\d{4}/)?.[0] ?? text('Publisher Information').match(/\d{4}/)?.[0] ?? '';
+  const keywords = [...(rows.get('주제어')?.querySelectorAll('a') ?? [])].map(a => collapse(fixTypography(a.textContent)));
+  const abstract = lines(rows.get('초록')).filter(hasKorean).map(fixTypography).join('\n\n');
+
+  // 학위논문: 대학 + (특수대학원) + 학과 + 학위 종류 → '연세대학교 국어국문학과 석사학위논문'
+  //   Degree  '일반대학원 국어국문학과, 현대문학전공, Dissertation', '정책대학원 경제정책학과, …',
+  //           '6W5|교육대학원 화학교육전공, …', '경기대2025(박)0037, 대학원 공연예술학과, …' (앞에 코드가 붙기도 함)
+  //   단체    '연세대학교', '경성대학교 일반대학원', '정책대학원 경제정책학과'(대학명 없음) 등 제각각
+  //   → 대학명은 단체·Publisher Information에서 '…대학교/…학교'를 찾고,
+  //     대학원은 RISS(formatThesisInfo)처럼 (일반)대학원이면 빼고 특수대학원이면 남김
+  //   석사·박사 구분이 없으면('Dissertation' 등) '학위논문'까지만
+  if (rows.has('Degree')) {
+    const degree = text('Degree').replace(/^[^|]*\|/, '');
+    // '○○대학원 ○○학과'로 시작하는 부분 (없으면 첫 부분)
+    const segments = degree.split(',').map(collapse);
+    const program = segments.find(seg => /^\S*원(\([^)]*\))?\s/.test(seg)) ?? segments[0];
+    const [graduate = '', ...deptWords] = program.split(' ');
+    const school = `${text('단체')} ${text('Publisher Information')}`.match(/\S+학교/)?.[0] ?? '';
+    const special = /^(일반)?대학원$/.test(graduate) ? '' : graduate.replace(/\([^)]*\)/g, '');
+    const department = deptWords.find(w => /(과|부)$/.test(w)) ?? deptWords.join(' ');
+    const level = /박사|\(박\)|doctor|ph\.?\s?d/i.test(degree) ? '박사' : /석사|\(석\)|master/i.test(degree) ? '석사' : '';
+    return verifyMetadata({
+      authors, title_main: main, title_sub: sub, year, keywords, abstract,
+      publisher: collapse(`${school} ${special} ${department} ${level}학위논문`)
+    });
+  }
+
+  // 학술지 논문
+  const { journal, volume, issue, pageFirst, pageLast } = parseEDSSource(header?.querySelector('p'), year);
+  return verifyMetadata({
+    authors, title_main: main, title_sub: sub,
+    journal_name: removeNonKoreanParen(fixTypography(journal)),
+    volume, issue,
+    publisher: removeNonKoreanParen(fixTypography(koreanPart(text('Publisher Information')))),
+    year,
+    page_first: pageFirst, page_last: pageLast,
+    keywords, abstract
+  });
+}
+
 //----- 실행 함수 -----
 function getMetadata(academicDB) {
   if (!academicDB) {
@@ -794,7 +991,8 @@ function getMetadata(academicDB) {
     'DBpia': parseDBpia,
     'eArticle': parseEArticle,
     '스콜라': parseSCHOLAR,
-    'KOAJ': parseKOAJ
+    'KOAJ': parseKOAJ,
+    '연세대': location.pathname.startsWith('/eds/') ? parseYonseiEDS : parseYonseiCatalog
   };
   const metadata = parsers[academicDB]();
   console.log(`${academicDB}에서 메타데이터가 추출됨`);

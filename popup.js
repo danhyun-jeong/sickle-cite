@@ -181,6 +181,7 @@ function addToHistory(entry) {
 //   KISS     …/Detail/Ar?key=4012345
 //   eArticle …/Article/A283769
 //   스콜라    …/article/detail/4010063029533
+//   연세대   library.yonsei.ac.kr/search/detail/CATTOT000002162902, …/eds/detail/edskst_edskst.article.57253
 const URL_ID_RULES = {
   RISS: { prefix: 'riss', key: url => url.searchParams.get('control_no') },
   DBpia: { prefix: 'dbpia', key: url => url.searchParams.get('nodeId') },
@@ -189,6 +190,7 @@ const URL_ID_RULES = {
   KISS: { prefix: 'kiss', key: url => url.searchParams.get('key') },
   eArticle: { prefix: 'earticle', key: url => url.pathname.match(/\/Article\/(\w+)/i)?.[1] },
   스콜라: { prefix: 'scholar', key: url => url.pathname.match(/\/article\/detail\/(\w+)/i)?.[1] },
+  '연세대': { prefix: 'yonsei', key: url => url.pathname.match(/\/detail\/([^/]+)/)?.[1] },
 };
 
 function articleKeyFromUrl(rawUrl, academicDB) {
