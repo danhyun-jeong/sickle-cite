@@ -115,89 +115,97 @@
   <!-- Tab 3 -->
   <div id="tab3" class="tab-content">
     <div id="tab3-scroll-area">
-      <!-- (1) 제목과 부제목 사이 구분 기호 설정 -->
-      <div class="section">
-        <h3>제목과 부제목 사이 구분 기호</h3>
-        <div class="inline-group">
-          <label title="줄표로 쓰이는 기호는 em-dash입니다. 엉뚱한 기호를 대충 비슷하게 생겼다고 막 갖다 쓰지 맙시다."><input type="radio" name="title-sep-option" value="dash-space" checked> 줄표(대시), 앞뒤 간격 있음 ( — )</label>
-          <label title="백번 양보해도, 줄표 들어갈 장리에 하이픈(-)을 쓰는 일만은 없도록 하십시다. 그건 의미도 달라져 버립니다."><input type="radio" name="title-sep-option" value="dash-nospace"> 줄표(대시), 앞뒤 간격 없음 (—)</label>
-          <label title="콜론은 원래 앞에는 붙이고 뒤에는 뛰어 쓰는 것이 맞습니다."><input type="radio" name="title-sep-option" value="colon"> 콜론 (: )</label>
-        </div>
-      </div>
-      <!-- (2) 권호수 표기 방식 설정 -->
-      <div class="section">
-        <h3>권호수 표기 방식</h3>
-        <select id="vol-iss-style" name="vol-iss-style">
-          <option value="none">권호수 단위 없는 표기법 — 예: 57(2)</option>
-          <option value="suffix">권호수 단위 있는 표기법 — 예: 57권 2호</option>
-          <option value="prefix">권호수 접두사만 있는 표기법 — 예: Vol.57 No.2</option>
-        </select>
-        <div id="vol-iss-options">
-          <!-- dynamic additional settings go here -->
-        </div>
-      </div>
-      <!-- (3) 제목 기호 설정 -->
-      <div class="section">
-        <h3>제목 기호</h3>
-        <label class="checkbox-label" title="참고로, 키보드 자판에 있는 것(< >)은 엄밀히는 부등호이지 화살괄호가 아닙니다.">
-          <span class="toggle-text">홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</span>
-          <span class="toggle-switch">
-            <input type="checkbox" name="title-brackets">
-            <span class="slider"></span>
-          </span>          
-        </label>
-        <label class="checkbox-label">
-          <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
-          <span class="toggle-switch">
-            <input type="checkbox" name="journal-brackets">
-            <span class="slider"></span>
-          </span>
-        </label>
-      </div>
-      <!-- (4) 쪽수 범위 표기 여부 설정 -->
-      <div class="section">
-        <h3>쪽수 범위 표기 여부</h3>
-        <label class="checkbox-label">
-          <span class="toggle-text">인용 표기에 쪽수 범위 포함하기</span>
-          <span class="toggle-switch">
-            <input type="checkbox" name="page-range-include">
-            <span class="slider"></span>
-          </span>
-        </label>
-        <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
-        <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
-      </div>
-      <!-- (5) 같은 논문을 다시 추출할 때 내역 저장 방식 -->
-      <div class="section" id="duplicate-extraction-section">
-        <h3>동일 논문의 서지정보 저장/h3>
-        <div class="inline-group">
-          <label><input type="radio" name="duplicate-extraction" value="keepAll" checked> 같은 논문의 서지정보를 재차 중복 추출할 경우 매번 각각의 추출 시도를 내역에 저장함</label>
-          <label><input type="radio" name="duplicate-extraction" value="firstOnly"> 앞으로는 같은 논문의 서지정보를 재차 중복 추출할 경우 첫 번째 이후의 추출은 내역에 추가되지 않음</label>
-        </div>
-        <div id="delete-duplicates-area" hidden>
-          <button id="delete-duplicates-btn" type="button">기존 중복 항목 삭제</button>
-          <div class="instructions">
-            <p>💡 기존 서지정보 추출 내역에서 같은 논문으로 판별되는 항목은 첫 번째로 추출된 항목만 남기고 이후 항목을 삭제함. 태그 추가를 비롯한 수정사항은 이미 중복 항목들에 모두 적용되어 있으므로 초기화되지 않음.</p>
+      <!-- 인용 표기 커스텀 -->
+      <div class="settings-group">
+        <h3>인용 표기 커스텀</h3>
+        <!-- (1) 제목과 부제목 사이 구분 기호 설정 -->
+        <div class="section">
+          <h4>제목과 부제목 사이 구분 기호</h4>
+          <div class="inline-group">
+            <label title="줄표로 쓰이는 기호는 em-dash입니다. 엉뚱한 기호를 대충 비슷하게 생겼다고 막 갖다 쓰지 맙시다."><input type="radio" name="title-sep-option" value="dash-space" checked> 줄표(대시), 앞뒤 간격 있음 ( — )</label>
+            <label title="백번 양보해도, 줄표 들어갈 장리에 하이픈(-)을 쓰는 일만은 없도록 하십시다. 그건 의미도 달라져 버립니다."><input type="radio" name="title-sep-option" value="dash-nospace"> 줄표(대시), 앞뒤 간격 없음 (—)</label>
+            <label title="콜론은 원래 앞에는 붙이고 뒤에는 뛰어 쓰는 것이 맞습니다."><input type="radio" name="title-sep-option" value="colon"> 콜론 (: )</label>
           </div>
         </div>
-      </div>
-      <!-- (6) 단축키 설정 안내 -->
-      <div class="section">
-        <h3>단축키</h3>
-        <div class="instructions">
-          <p>💡 단축키를 눌러 본 확장 프로그램을 실행(= 팝업 창 열기 = 현재 페이지에서 논문 서지정보를 추출)할 수 있습니다.</p>
-          <p>💡 원하는 단축키로 설정하려면: 크롬에서 확장 프로그램 → 확장 프로그램 관리 → 단축키 → Sickle-Cite</p>
+        <!-- (2) 권호수 표기 방식 설정 -->
+        <div class="section">
+          <h4>권호수 표기 방식</h4>
+          <select id="vol-iss-style" name="vol-iss-style">
+            <option value="none">권호수 단위 없는 표기법 — 예: 57(2)</option>
+            <option value="suffix">권호수 단위 있는 표기법 — 예: 57권 2호</option>
+            <option value="prefix">권호수 접두사만 있는 표기법 — 예: Vol.57 No.2</option>
+          </select>
+          <div id="vol-iss-options">
+            <!-- dynamic additional settings go here -->
+          </div>
+        </div>
+        <!-- (3) 제목 기호 설정 -->
+        <div class="section" id="title-mark-section">
+          <h4>제목 기호</h4>
+          <label class="checkbox-label" title="참고로, 키보드 자판에 있는 것(< >)은 엄밀히는 부등호이지 화살괄호가 아닙니다.">
+            <span class="toggle-text">홑낫표 「 」 대신 홑화살괄호 〈 〉 쓰기</span>
+            <span class="toggle-switch">
+              <input type="checkbox" name="title-brackets">
+              <span class="slider"></span>
+            </span>          
+          </label>
+          <label class="checkbox-label">
+            <span class="toggle-text">겹낫표 『 』 대신 겹화살괄호 《 》 쓰기</span>
+            <span class="toggle-switch">
+              <input type="checkbox" name="journal-brackets">
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
+        <!-- (4) 쪽수 범위 표기 여부 설정 -->
+        <div class="section" id="page-range-section">
+          <h4>쪽수 범위 표기 여부</h4>
+          <label class="checkbox-label">
+            <span class="toggle-text">인용 표기에 쪽수 범위 포함하기</span>
+            <span class="toggle-switch">
+              <input type="checkbox" name="page-range-include">
+              <span class="slider"></span>
+            </span>
+          </label>
+          <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽수 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
+          <div class="field"><label>쪽수 범위 단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
         </div>
       </div>
-      <!-- (7) 서지정보 추출 내역 내보내기(백업)·가져오기 -->
-      <div class="section" id="history-backup-section">
-        <h3>서지정보 추출 내역 내보내기(백업) 및 가져오기</h3>
-        <div class="backup-buttons">
-          <button id="history-export-btn" type="button">내보내기</button>
-          <button id="history-import-btn" type="button">가져오기</button>
+      <!-- 프로그램 설정 -->
+      <div class="settings-group">
+        <h3>프로그램 설정</h3>
+        <!-- (5) 같은 논문을 다시 추출할 때 내역 저장 방식 -->
+        <div class="section" id="duplicate-extraction-section">
+          <h4>동일 논문의 서지정보 저장</h4>
+          <div class="inline-group">
+            <label><input type="radio" name="duplicate-extraction" value="keepAll" checked> 같은 논문의 서지정보를 재차 중복 추출할 경우 매번 각각의 추출 시도를 내역에 저장함</label>
+            <label><input type="radio" name="duplicate-extraction" value="firstOnly"> 앞으로는 같은 논문의 서지정보를 재차 중복 추출할 경우 첫 번째 이후의 추출은 내역에 추가되지 않음</label>
+          </div>
+          <div id="delete-duplicates-area" hidden>
+            <button id="delete-duplicates-btn" type="button">기존 중복 항목 삭제</button>
+            <div class="instructions">
+              <p>💡 기존 서지정보 추출 내역에서 같은 논문으로 판별되는 항목은 첫 번째로 추출된 항목만 남기고 이후 항목을 삭제함. 태그 추가를 비롯한 수정사항은 이미 중복 항목들에 모두 적용되어 있으므로 초기화되지 않음.</p>
+            </div>
+          </div>
         </div>
-        <div class="instructions">
-          <p>💡 서지정보 추출 내역 데이터를 JSON 파일 형태로 내보내기하여 백업해둘 수 있습니다. 그 JSON 파일을 가져오기 함으로써 내역을 특정 시점의 데이터로 되돌리거나 데이터를 이전할 수 있습니다.</p>
+        <!-- (6) 서지정보 추출 내역 내보내기(백업)·가져오기 -->
+        <div class="section" id="history-backup-section">
+          <h4>서지정보 추출 내역 내보내기(백업) 및 가져오기</h4>
+          <div class="backup-buttons">
+            <button id="history-export-btn" type="button">내보내기</button>
+            <button id="history-import-btn" type="button">가져오기</button>
+          </div>
+          <div class="instructions">
+            <p>💡 서지정보 추출 내역 데이터를 JSON 파일 형태로 내보내기하여 백업해둘 수 있습니다. 그 JSON 파일을 가져오기 함으로써 내역을 특정 시점의 데이터로 되돌리거나 데이터를 이전할 수 있습니다.</p>
+          </div>
+        </div>
+        <!-- (7) 단축키 설정 안내 -->
+        <div class="section">
+          <h4>단축키</h4>
+          <div class="instructions">
+            <p>💡 단축키를 눌러 본 확장 프로그램을 실행(= 팝업 창 열기 = 현재 페이지에서 논문 서지정보를 추출)할 수 있습니다.</p>
+            <p>💡 원하는 단축키로 설정하려면: 크롬에서 확장 프로그램 → 확장 프로그램 관리 → 단축키 → Sickle-Cite</p>
+          </div>
         </div>
       </div>
     </div>

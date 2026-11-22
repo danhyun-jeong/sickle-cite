@@ -208,8 +208,20 @@ textarea:focus,
     margin-bottom: 0;
 }
 
+/* 설정 탭: 상위 항목(인용 표기 커스텀 / 프로그램 설정) */
+#tab3 .settings-group + .settings-group {
+    margin-top: calc(var(--spacing)*3);
+}
 #tab3 h3 {
-    font-size: 18px;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    padding-bottom: calc(var(--spacing)/2);
+    border-bottom: 1px solid var(--border);
+}
+#tab3 h4 {
+    font-size: 16px;
     font-weight: 600;
     color: var(--text);
     margin-bottom: calc(var(--spacing)*1.5);
@@ -389,7 +401,7 @@ table td {
     padding-bottom: 10px;
 }
 
-#tab3 .section:nth-of-type(3) > label {
+#tab3 #title-mark-section > label {
     display: flex;
     align-items: center;
     margin-top: 12px;
@@ -577,7 +589,7 @@ border: 1px solid var(--border);
   display: block;
 }
 
-#tab3 .section:nth-of-type(4) .field input {
+#tab3 #page-range-section .field input {
     width: 30px;
 }
 
@@ -708,9 +720,9 @@ input[type="radio"]:checked::before {
     transform: translate(-50%, -50%) scale(1);
 }
 
-/* 탭3의 inline-group 섹션에 대한 추가 여백 설정 */
-#tab3 .section:first-child {
-    margin-top: 12px;
+/* 상위 항목 제목 바로 아래 첫 항목의 여백 */
+#tab3 h3 + .section {
+    margin-top: calc(var(--spacing)*1.5);
 }
 
 /* 태그 기능 스타일 */
