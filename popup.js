@@ -546,13 +546,17 @@ function bindTab1Buttons() {
     }
   });
 
-  // [수정사항을 내역에 저장] 현재 표시 중인 내역 항목의 서지정보를 덮어씀
+  // [수정사항을 내역에 저장] 현재 표시 중인 논문의 서지정보를 덮어씀
+  // 팝업을 열 때마다 같은 논문의 추출 내역이 한 건씩 쌓이므로, 태그와 마찬가지로
+  // 같은 논문인 모든 내역 항목에 함께 반영한다. 묶음은 '수정 전' 서지정보 기준으로 찾아야
+  // 저자·제목·연도 등을 고쳐도 고치지 않은 사본이 별도 행으로 남지 않는다.
   $('#save-metadata-btn').addEventListener('click', async () => {
     let found = false;
     await updateHistory(history => {
-      const item = history.find(entry => entry.timestampId === state.timestampId);
-      if (!item) return;
-      item.metadata = structuredClone(state.metadata);
+      const target = history.find(entry => entry.timestampId === state.timestampId);
+      if (!target) return;
+      history.filter(item => isSameArticle(item, target))
+        .forEach(item => { item.metadata = structuredClone(state.metadata); });
       found = true;
     });
     if (!found) {
