@@ -340,7 +340,7 @@ const DEFAULT_SETTINGS = {
   titleSeparator: 'dash-space',        // 'dash-space' | 'dash-nospace' | 'colon'
   volumeIssueStyle: 'none',            // 'none' | 'suffix' | 'prefix'
   // addJeVolume/addJeIssue: 권수·호수 앞에 '제'를 각각 붙일지 (권/호 구분이 없을 때는 호수 설정을 따름)
-  suffix: { volume: '권', issue: '호', either: '호', addJeVolume: true, addJeIssue: true },
+  suffix: { volume: '권', issue: '호', either: '집', addJeVolume: true, addJeIssue: true },
   prefix: { volume: 'Vol.', issue: 'No.', either: 'No.' },
   angleTitleBrackets: false,           // 「 」 대신 〈 〉
   halfwidthTitleBrackets: false,       // 「 」 대신 반각 ｢ ｣ (〈 〉를 쓰면 무시)
@@ -480,14 +480,14 @@ function renderVolIssOptions() {
     html = `
       ${field('volume-suffix', '권수 단위:')}
       ${field('issue-suffix', '호수 단위:')}
-      ${field('either-suffix', '구분 없을 시 단위:')}
+      ${field('either-suffix', '권/호 구분 없을 시 단위:')}
       ${jeToggle('prefix-제-volume', "권수 앞에 접두사 '제' 붙이기")}
       ${jeToggle('prefix-제-issue', "호수 앞에 접두사 '제' 붙이기")}`;
   } else if (mode === 'prefix') {
     html = `
       ${field('volume-prefix', '권수 접두사:')}
       ${field('issue-prefix', '호수 접두사:')}
-      ${field('either-prefix', '구분 없을 시 접두사:')}`;
+      ${field('either-prefix', '권/호 구분 없을 시 접두사:')}`;
   }
   volIssContainer.innerHTML = html;
   volIssContainer.dataset.mode = mode;
