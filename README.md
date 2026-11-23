@@ -109,6 +109,8 @@ __________________
 
 ## (1) 핵심 기능 및 사용법
 
+<p align="center"><img width="800" alt="학술 DB 논문 페이지에서 팝업을 연 모습" src="docs/screenshots/overview.webp" /></p>
+
 - 학술 데이터베이스의 논문 검색 결과 페이지에서 확장 프로그램을 실행(아이콘 클릭)하여 팝업 창을 열기만 하면, 그 즉시 해당 페이지에서 ‘<img src="docs/icons/metadata.svg" width="16" height="16" align="absmiddle" alt=""> 논문의 서지정보’를 추출하여 결과물을 보여줍니다.
 	- 추출하는 서지정보 항목은 다음과 같습니다: 저자, 본제목, 부제목, 학술지명, 권수, 호수, 발간기관, 연도, 첫 페이지, 끝 페이지, 키워드, 국문 초록
 - 서지정보를 조합하여 ‘<img src="docs/icons/citation.svg" width="16" height="16" align="absmiddle" alt=""> 인용 표기’로 만들어서 보여주며, 버튼 하나로 이를 간편하게 클립보드에 복사할 수 있습니다.
@@ -129,7 +131,7 @@ __________________
 
 ### 탭 1. 현재 페이지 서지정보
 
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/d3b53432-cab3-4c3d-9e94-33e47f6d34ec" /></p>
+<p align="center"><img width="650" alt="탭 1. 현재 페이지 서지정보" src="docs/screenshots/tab1.png" /></p>
 
 - [<img src="docs/icons/current-page.svg" width="16" height="16" align="absmiddle" alt=""> 현재 페이지 서지정보] 탭이 눌려 있을 때 표시되는 화면의 좌측 〈<img src="docs/icons/metadata.svg" width="16" height="16" align="absmiddle" alt=""> 논문 서지정보〉 부분에서는 논문의 서지정보(metadata)를 항목별로 볼 수 있으며, 우측 상단 〈<img src="docs/icons/citation.svg" width="16" height="16" align="absmiddle" alt=""> 인용 표기〉 부분에서는 서지정보를 바탕으로 인용 표기(citation)를 확인할 수 있습니다.
 - 본 확장 프로그램을 실행하면, 즉 팝업 창을 열면 그것이 트리거가 되어 현재 페이지에서 논문의 서지정보를 추출하여 〈<img src="docs/icons/metadata.svg" width="16" height="16" align="absmiddle" alt=""> 논문 서지정보〉의 각 필드와 〈<img src="docs/icons/citation.svg" width="16" height="16" align="absmiddle" alt=""> 인용 표기〉의 필드를 채웁니다. 즉 ‘서지정보 추출하기’ 버튼 같은 것은 없습니다. 그냥 이 확장 프로그램을 실행하면 = 팝업 창을 열기만 하면 됩니다.
@@ -155,7 +157,7 @@ __________________
 
 ### 탭 2. 서지정보 추출 내역
 
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/fbb2c6f1-43b3-4111-af8f-077f802b1e0a" /></p>
+<p align="center"><img width="650" alt="탭 2. 서지정보 추출 내역" src="docs/screenshots/tab2.png" /></p>
 
 - [<img src="docs/icons/history.svg" width="16" height="16" align="absmiddle" alt=""> 서지정보 추출 내역]은 영어로는 ‘history’라 불리는 것입니다. 지금까지 본 확장 프로그램을 실행함으로써 추출한 서지정보는 팝업 창이 닫혔을 때 사라지는 것이 아니라 이곳에 저장됩니다. 그렇기에 [탭 1]에서 매번 미리 복사해놓고 다른 어딘가에 붙여넣기 해두고…… 하실 필요 없습니다. 서지정보 추출이 잘 되었는지만 눈으로 확인하신 후에는, 안심하고 그저 팝업 창 닫고 하시던 작업을 마저 하시면 됩니다. 한번 추출된 논문 서지정보는 그 정보를 어디서, 언제 추출했는지에 관한 정보와 함께, 언제든 나중에 다시 확인할 수 있습니다. 단, **이 확장 프로그램을 삭제하실 경우 저장되어 있던 내역도 삭제됩니다.**
 
@@ -180,6 +182,8 @@ __________________
 
 #### 검색 창
 
+<p align="center"><img width="650" alt="탭 2. 검색 창과 필터" src="docs/screenshots/tab2-search-filter.png" /></p>
+
 - 검색 창에서는 말 그대로 검색을 하실 수 있습니다. 이때 현재 [탭 2] 화면에서 보이는 정보, 즉 ‘저자’와 ‘제목’만 검색 가능한 것이 아니고, 논문의 서지정보에 해당하는 모든 정보가 다 검색됩니다. 예컨대 학술지명을 검색하면 해당 학술지에 게재된 논문만 모아 볼 수 있습니다. 키워드나 국문 초록 정보가 있을 경우 이 역시 검색에 걸리게 됩니다.
 - (2.0.0 버전 신기능) 검색 창 안 왼쪽의 드롭다운 버튼에서 검색할 항목을 고를 수 있습니다: 전체, 저자, 제목, 학술지명, 발간기관, 키워드, 초록, 태그. 예컨대 ‘저자’를 고르고 검색하면, 저자 이름에 검색어가 들어 있는 논문만 찾습니다. (‘전체’에서는 초록에 그 이름이 언급된 논문까지 검색에 걸립니다.)
 - 공백으로 나누어 여러 단어를 입력하면, 그 단어가 모두 들어 있는 논문만 찾습니다.
@@ -196,11 +200,7 @@ __________________
 
 #### 하단 버튼 및 스위치
 
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/0a303310-d856-4935-928e-4185ea997be6" /></p>
-
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/4b9dc9f0-1165-4216-b602-5e2a0f024119" /></p>
-
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/9920d346-7ee1-4965-939d-af7963f63bd4" /></p>
+<p align="center"><img width="650" alt="탭 2. [학술 DB], [추출 일시] 열을 숨긴 모습" src="docs/screenshots/tab2-hide-columns.png" /></p>
 
 1. 팝업 창의 맨 아래 오른쪽에는 "같은 논문이 중복될 경우 첫 번째만 표시" 토글 스위치와 "[학술 DB], [추출 일시] 열 숨기기" 토글 스위치가 있습니다.
 	1. "같은 논문이 중복될 경우 첫 번째만 표시" 토글 스위치
@@ -226,7 +226,7 @@ __________________
 
 ### 탭 3. 설정
 
-<p align="center"><img width="650" alt="Image" src="https://github.com/user-attachments/assets/7711d423-e905-4e55-b12c-f889d1ca9f69" /></p>
+<p align="center"><img width="650" alt="탭 3. 인용 형식 세부 설정" src="docs/screenshots/tab3-citation.png" /></p>
 
 - [<img src="docs/icons/settings.svg" width="16" height="16" align="absmiddle" alt=""> 설정] 탭에서는 인용 양식에서 일부 사항을 설정할 수 있습니다. (‘인용 형식 세부 설정’) 이 밖에 내역 저장 방식, 백업, 테마 등 프로그램 자체에 관한 사항도 설정할 수 있습니다. (‘프로그램 설정’)
 - [<img src="docs/icons/settings.svg" width="16" height="16" align="absmiddle" alt=""> 설정] 탭에서 선택한 옵션은 [<img src="docs/icons/current-page.svg" width="16" height="16" align="absmiddle" alt=""> 현재 페이지 서지정보] 탭에서의 〈<img src="docs/icons/citation.svg" width="16" height="16" align="absmiddle" alt=""> 인용 표기〉에뿐 아니라 다운로드되는 엑셀 파일에서의 ‘인용 표기’ 열에도 영향을 미칩니다.
@@ -266,6 +266,8 @@ __________________
 	- 또한 단위를 무엇으로 할 것인지 설정할 수 있습니다. 디폴트는 ‘쪽’이지만, 원한다면 예컨대 ‘면’으로 바꾸실 수 있습니다.
 
 #### 프로그램 설정
+
+<p align="center"><img width="650" alt="탭 3. 프로그램 설정" src="docs/screenshots/tab3-program.png" /></p>
 
 1. 동일 논문의 서지정보 저장: 같은 논문의 서지정보를 다시 추출할 때 이를 내역에 어떻게 저장할지 고를 수 있습니다.
 	- 매번의 추출 시도를 각각 내역에 저장합니다. (디폴트)
