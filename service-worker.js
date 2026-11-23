@@ -21,7 +21,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
       }
       await chrome.storage.local.set({ history, keywordRuleApplied: true });
     }
-    // 1.8 개발 중에 잠시 쓰였던 표시값 정리
+    // 2.0 개발 중에 잠시 쓰였던 표시값 정리
     await chrome.storage.local.remove('articleGroupingVersion');
   } catch (err) {
     console.error('내역 다시 묶기 실패:', err);

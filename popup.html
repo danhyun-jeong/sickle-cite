@@ -50,14 +50,18 @@
       <div class="divider"></div>
       <div class="pane right-pane">
         <div class="citation-container pane-section">
-          <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg>조합된 인용 표기</h3>
+          <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg>인용 표기</h3>
+          <label id="quick-preset" class="quick-preset" title="저장해 둔 인용 형식 조합으로 바꿉니다">
+            <span class="quick-preset-label">인용 형식 조합</span>
+            <select id="quick-preset-select"></select>
+          </label>
           <textarea class="citation-input" placeholder=""></textarea>
           <div class="actions">
             <button id="copy-citation-btn" class="primary-btn" title="이 버튼을 누르신 후 원하는 곳에서 붙여넣기(Ctrl+V)하시면 됩니다"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>클립보드에 복사</button>
           </div>
         </div>
         <div class="tags-container pane-section">
-          <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>프로젝트 태그 추가</h3>
+          <h3><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>태그 추가</h3>
           <div class="tag-input-container">
             <ul id="tag-list" class="tag-list"></ul>
             <input id="tags-input" type="text" placeholder="입력 후 Enter로 추가" />
@@ -106,7 +110,7 @@
       </div>
       <span class="filter-label">연도</span>
       <input id="year-from" class="year-input" type="text" inputmode="numeric" maxlength="4">
-      <span class="year-sep">~</span>
+      <span class="year-sep">–</span>
       <input id="year-to" class="year-input" type="text" inputmode="numeric" maxlength="4">
       <button id="reset-filters" type="button" hidden>↺ 필터 초기화</button>
     </div>
@@ -149,9 +153,28 @@
   <!-- Tab 3 -->
   <div id="tab3" class="tab-content">
     <div id="tab3-scroll-area">
-      <!-- 인용 표기 커스텀 -->
+      <!-- 인용 형식 세부 설정 -->
       <div class="settings-group">
-        <h3>인용 표기 커스텀</h3>
+        <h3>인용 형식 세부 설정</h3>
+        <!-- (0) 인용 형식 조합(프리셋) -->
+        <div class="section" id="preset-section">
+          <h4>인용 형식 조합</h4>
+          <div class="preset-row">
+            <select id="preset-select" title="조합을 고르면 바로 적용됩니다"></select>
+            <button id="preset-overwrite-btn" type="button" hidden>변경 사항을 이 조합에 저장</button>
+            <button id="preset-save-as-btn" type="button" hidden>현재 형식을 새 조합으로 저장</button>
+          </div>
+          <div class="preset-buttons">
+            <button id="preset-rename-btn" type="button" title="선택된 조합의 이름을 바꿉니다">이름 변경</button>
+            <button id="preset-delete-btn" type="button">조합 삭제</button>
+          </div>
+          <div class="instructions">
+            <p class="hint">아래의 세부 설정 조합에 이름을 붙여 저장해 두었다가 이를 원할 때 일괄 적용할 수 있습니다. 저장된 조합은 [현재 페이지 서지정보] 탭에서도 퀵 스위칭할 수 있습니다.</p>
+            <p class="hint">세부 설정을 바꾸면 [현재 페이지 서지정보] 탭의 인용 표기에는 곧바로 반영되지만, 조합으로 저장은 [변경 사항을 이 조합에 저장] 또는 [현재 형식을 새 조합으로 저장]을 눌러야 완료됩니다.</p>
+          </div>
+        </div>
+        <!-- (1)~(4): 선택된 조합에 속하는 세부 항목 (왼쪽 선으로 묶어 조합 아래에 있음을 나타냄) -->
+        <div id="preset-scope" class="preset-scope">
         <!-- (1) 제목과 부제목 사이 구분 기호 설정 -->
         <div class="section">
           <h4>제목과 부제목 사이 구분 기호</h4>
@@ -212,6 +235,7 @@
           <div class="field"><label title="디폴트는 en dash(–)입니다. 범위를 나타낼 때 tilde(~)를 사용하는 것은 동아시아권에서만 통용되는 표기법이라고 합니다.">쪽 범위 구분자:</label><input type="text" name="page-range-separator" value="–"></div>
           <div class="field"><label>단위:</label><input type="text" name="page-range-unit" value="쪽"></div>
         </div>
+        </div> <!-- end preset-scope -->
       </div>
       <!-- 프로그램 설정 -->
       <div class="settings-group">
@@ -296,6 +320,16 @@
       <button id="delete-duplicates-no">아니요</button>
     </div>
   </div>
+  <!-- 인용 형식 조합: 이름 입력·확인 모달 -->
+  <div id="preset-dialog" class="modal hidden">
+    <div class="modal-content">
+      <p id="preset-dialog-message" class="preset-dialog-message"></p>
+      <input id="preset-dialog-input" type="text" maxlength="20" autocomplete="off" hidden>
+      <p id="preset-dialog-error" class="preset-dialog-error" aria-live="polite"></p>
+      <button id="preset-dialog-yes"></button>
+      <button id="preset-dialog-no"></button>
+    </div>
+  </div>
   <!-- 인용 표기 복사 모달 -->
   <div id="copy-citations-modal" class="modal hidden">
     <div class="modal-content">
@@ -313,7 +347,7 @@
       <div class="export-options">
         <div class="export-option">
           <button id="export-excel" class="export-option-button">엑셀 파일로 다운로드</button>
-          <p class="export-description">각 항목(논문)에 대한 모든 정보(서지정보, 추출한 DB, URL, 추출 일시<br>뿐 아니라 조합된 인용 표기, 태그까지)를 엑셀 파일로 저장합니다.</p>
+          <p class="export-description">각 항목(논문)에 대한 모든 정보(서지정보, 추출한 DB, URL, 추출 일시<br>뿐 아니라 인용 표기, 태그까지)를 엑셀 파일로 저장합니다.</p>
         </div>
         <div class="export-option">
           <button id="export-ris" class="export-option-button">.ris 파일로 다운로드</button>

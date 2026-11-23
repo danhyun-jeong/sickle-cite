@@ -7,7 +7,7 @@
 //   2. 인용 양식 설정 (탭3)
 //   3. 인용 표기 조합
 //   4. 탭1: 서지정보 필드, 복사·저장 버튼
-//   5. 탭1: 프로젝트 태그
+//   5. 탭1: 태그
 //   6. 탭2: 내역 표, 선택 항목 삭제·복사·내보내기
 //   7. 시작 (팝업이 열릴 때 한 번 실행)
 // =============================================================================
@@ -29,9 +29,11 @@ const ABSTRACT_COLLAPSED_LINES = 4;
 // 팝업 전체가 공유하는 상태. 화면은 항상 이 값을 기준으로 그린다.
 const state = {
   metadata: {},              // 탭1에 표시 중인 서지정보 (사용자의 직접 수정이 즉시 반영됨)
-  timestampId: null,         // 탭1에 표시 중인 내역 항목의 id
-  tags: [],                  // 탭1에 표시 중인 프로젝트 태그
+  timestampId: null,         // 탭1에 표시 중인 내역 항목의 id (추출에 실패해 아직 저장 전이면 null)
+  isManual: false,           // 탭1에 표시 중인 항목이 직접 입력한 항목인지
+  tags: [],                  // 탭1에 표시 중인 태그
   settings: null,            // 인용 양식 설정 (2. 참고)
+  presets: { list: [], activeId: null }, // 저장해 둔 인용 형식 조합 (2. 참고)
   selectedIds: new Set(),    // 탭2에서 체크된 항목의 timestampId (문자열)
   pendingCitations: ''       // '인용 표기 복사' 모달에서 복사할 텍스트
 };
@@ -58,11 +60,11 @@ const joinList = (value, separator = ', ') => toArray(value).join(separator);
 // '26.11.22. 22:00:00' → '26.11.22. 22:00' (초 단위 제거)
 const withoutSeconds = timestamp => timestamp.slice(0, timestamp.lastIndexOf(':'));
 
-// 파일명용 오늘 날짜 'YY.MM.DD'
-function todayStamp() {
-  const now = new Date();
+// 내보내기 파일 이름에 붙는 일시 'YYMMDD-hhmm' (엑셀·RIS·JSON 백업 공통)
+function fileStamp(date = new Date()) {
   const pad = n => String(n).padStart(2, '0');
-  return `${pad(now.getFullYear() % 100)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+  return [date.getFullYear() % 100, date.getMonth() + 1, date.getDate()].map(pad).join('')
+    + '-' + [date.getHours(), date.getMinutes()].map(pad).join('');
 }
 
 // 같은 논문인지는 내역에 추가될 때 한 번만 판별해(아래 '1-1. 같은 논문 판별') 묶음 번호(articleId)로 기록해 둔다.
@@ -70,8 +72,8 @@ function todayStamp() {
 const isSameArticle = (a, b) => Boolean(a.articleId) && a.articleId === b.articleId;
 
 // 사용자에게 잠깐 보이는 알림
-//   type 'info'  : 화면 아래, 어두운 배경 (기본 1초)
-//   type 'error' : 화면 가운데, 붉은 배경 (기본 1.5초)
+//   type 'info'  : 화면 아래, 어두운 배경 (기본 2초)
+//   type 'error' : 화면 가운데, 붉은 배경 (기본 2초)
 function showToast(message, { type = 'info', duration } = {}) {
   const isError = type === 'error';
   // 아래쪽 안내가 이미 떠 있으면 그 위로 쌓아서 겹치지 않게 함
@@ -100,7 +102,7 @@ function showToast(message, { type = 'info', duration } = {}) {
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-  }, duration ?? (isError ? 1500 : 1000));
+  }, duration ?? 2000);
 }
 const showError = (message, options) => showToast(message, { ...options, type: 'error' });
 
@@ -345,7 +347,7 @@ const DEFAULT_SETTINGS = {
   angleTitleBrackets: false,           // 「 」 대신 〈 〉
   halfwidthTitleBrackets: false,       // 「 」 대신 반각 ｢ ｣ (〈 〉를 쓰면 무시)
   angleJournalBrackets: false,         // 『 』 대신 《 》
-  pageRange: { include: false, separator: '–', unit: '쪽' },
+  pageRange: { include: true, separator: '–', unit: '쪽' },  // 쪽 범위 포함이 기본
   // 같은 논문을 다시 추출했을 때: 'keepAll'(매번 내역에 저장) | 'firstOnly'(첫 번째만 저장)
   duplicateExtraction: 'keepAll',
   theme: 'auto'                        // 'light' | 'dark' | 'auto'
@@ -354,7 +356,7 @@ const TITLE_SEPARATORS = { 'dash-space': ' — ', 'dash-nospace': '—', 'colon'
 
 // 저장된 설정에 빠진 항목이 있으면 기본값으로 채움
 function withDefaults(saved = {}) {
-  // 1.8.0 이전: 권·호 '제'를 하나(addJe)로 저장했음 → 둘 다 그 값으로
+  // 2.0.0 이전: 권·호 '제'를 하나(addJe)로 저장했음 → 둘 다 그 값으로
   const { addJe, ...savedSuffix } = saved.suffix ?? {};
   return {
     ...DEFAULT_SETTINGS,
@@ -564,6 +566,7 @@ function readSettingsForm() {
 function bindSettingsForm() {
   $('#tab3').addEventListener('change', event => {
     if (!event.target.matches('input, select, textarea')) return;
+    if (event.target.closest('#preset-section')) return; // 조합 선택은 bindPresetControls()가 맡음
     const modeChanged = event.target === volIssSelect;
     state.settings = readSettingsForm();
     if (modeChanged) renderVolIssOptions();
@@ -571,6 +574,7 @@ function bindSettingsForm() {
     $('#delete-duplicates-area').hidden = state.settings.duplicateExtraction !== 'firstOnly';
     applyTheme(state.settings.theme);
     saveSettings();
+    renderPresetControls(); // 조합과 달라졌으면 '(변경됨)' 표시
     renderCitation();
     renderHistory(); // 내역 표의 제목에도 제목 구분자가 들어가므로 갱신
   });
@@ -603,6 +607,267 @@ function bindSettingsForm() {
   });
 }
 
+// --- 인용 형식 조합(프리셋) ---
+// '인용 형식 세부 설정'들의 조합에 이름을 붙여 저장해 두고 골라 쓴다 (테마 등 프로그램 설정은 제외).
+// 지금 쓰고 있는 설정은 여전히 citationSettings에 있고, 조합은 그 사본이다.
+// 조합은 항상 1개 이상 있고, 그중 하나가 늘 선택되어 있다. (처음에는 'Sickle-Cite 기본' 하나)
+// 설정을 바꾸면 인용 표기에는 곧바로 반영되지만, 조합에는 직접 저장해야 반영된다.
+const PRESETS_KEY = 'citationPresets';
+const MAX_PRESETS = 10;
+const MAX_PRESET_NAME_LENGTH = 20;
+const DEFAULT_PRESET_NAME = 'Sickle-Cite 기본';
+const CITATION_SETTING_KEYS = [
+  'titleSeparator', 'volumeIssueStyle', 'suffix', 'prefix',
+  'angleTitleBrackets', 'halfwidthTitleBrackets', 'angleJournalBrackets', 'pageRange'
+];
+
+// 설정 전체 → 조합에 저장할 부분만 (빠진 값은 기본값으로 채운 뒤 골라냄)
+const citationPart = settings =>
+  structuredClone(Object.fromEntries(CITATION_SETTING_KEYS.map(key => [key, withDefaults(settings)[key]])));
+
+function sameValue(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].every(key => sameValue(a[key], b[key]));
+}
+const sameCitationSettings = (a, b) => sameValue(citationPart(a), citationPart(b));
+// 지금 설정과 똑같은 조합 (없으면 undefined)
+const presetMatchingSettings = (list = state.presets.list) =>
+  list.find(preset => sameCitationSettings(preset.style, state.settings));
+
+// 저장된 조합을 불러옴. 처음이면 기본 설정을 'Sickle-Cite 기본' 조합으로 만들어 둔다.
+// (state.settings를 먼저 불러온 뒤에 호출해야 함)
+async function loadPresets() {
+  const { [PRESETS_KEY]: saved } = await chrome.storage.sync.get(PRESETS_KEY);
+  const list = (Array.isArray(saved?.list) ? saved.list : [])
+    .filter(preset => preset?.id && typeof preset.name === 'string' && preset.style);
+  if (list.length === 0) {
+    const preset = { id: crypto.randomUUID(), name: DEFAULT_PRESET_NAME, style: citationPart(DEFAULT_SETTINGS) };
+    const presets = { list: [preset], activeId: preset.id };
+    await chrome.storage.sync.set({ [PRESETS_KEY]: presets });
+    return presets;
+  }
+  const activeId = list.some(preset => preset.id === saved.activeId)
+    ? saved.activeId
+    : (presetMatchingSettings(list) ?? list[0]).id;
+  return { list, activeId };
+}
+
+// 저장에 실패하면(용량 초과 등) 화면도 이전 상태로 되돌림
+async function savePresets(previous) {
+  try {
+    await chrome.storage.sync.set({ [PRESETS_KEY]: state.presets });
+    return true;
+  } catch (err) {
+    console.error(err);
+    state.presets = previous;
+    renderPresetControls();
+    showError('인용 형식 조합을 저장하지 못했습니다');
+    return false;
+  }
+}
+
+const activePreset = () =>
+  state.presets.list.find(preset => preset.id === state.presets.activeId) ?? state.presets.list[0];
+const isPresetModified = () => {
+  const preset = activePreset();
+  return Boolean(preset) && !sameCitationSettings(preset.style, state.settings);
+};
+
+// 설정 탭과 탭1의 조합 선택 메뉴, 버튼 상태를 현재 상태에 맞게 그림
+function renderPresetControls() {
+  const active = activePreset();
+  const modified = isPresetModified();
+  const label = preset => preset === active && modified ? `${preset.name} (변경됨)` : preset.name;
+  for (const select of [$('#preset-select'), $('#quick-preset-select')]) {
+    select.replaceChildren(...state.presets.list.map(preset => new Option(label(preset), preset.id)));
+    select.value = active?.id ?? '';
+    select.classList.toggle('is-modified', modified);
+  }
+  $('#preset-scope').classList.toggle('is-modified', modified); // 세부 항목을 묶는 선을 강조
+
+  // 설정을 바꿨을 때만 저장 버튼이 나타남. 바꾼 결과가 다른 조합과 똑같으면 저장할 수 없음 (같은 조합이 이름만 달리 여럿 생기지 않게)
+  const overwriteBtn = $('#preset-overwrite-btn');
+  const saveAsBtn = $('#preset-save-as-btn');
+  overwriteBtn.hidden = saveAsBtn.hidden = !modified;
+  const duplicate = modified ? presetMatchingSettings() : undefined;
+  const duplicateNote = duplicate && `현재 설정과 동일한 조합(‘${duplicate.name}’)이 이미 저장되어 있습니다`;
+  const fullNote = state.presets.list.length >= MAX_PRESETS && `인용 형식 조합은 ${MAX_PRESETS}개까지 저장할 수 있습니다`;
+  setPresetButtonBlocked(overwriteBtn, duplicateNote, '바꾼 설정을 지금 선택된 조합에 덮어써서 저장합니다');
+  setPresetButtonBlocked(saveAsBtn, duplicateNote || fullNote, '현재 설정에 이름을 붙여 새 인용 형식 조합으로 저장합니다');
+
+  // 조합은 적어도 1개는 있어야 하므로 마지막 하나는 지울 수 없음
+  setPresetButtonBlocked($('#preset-delete-btn'),
+    state.presets.list.length <= 1 && '적어도 1개의 인용 형식 조합이 저장되어 있어야 합니다',
+    '선택된 조합을 삭제합니다');
+}
+
+// 쓸 수 없는 버튼은 흐리게 표시하되, disabled로 막지는 않음:
+// 눌렀을 때 왜 쓸 수 없는지 안내하기 위해서 (disabled 버튼은 클릭 이벤트가 생기지 않음)
+function setPresetButtonBlocked(button, reason, normalTitle) {
+  button.classList.toggle('is-blocked', Boolean(reason));
+  button.setAttribute('aria-disabled', String(Boolean(reason)));
+  button.dataset.blockedReason = reason || '';
+  button.title = reason || normalTitle;
+}
+// 흐린 버튼을 눌렀으면 이유를 붉은 안내로 알리고 true
+// (연속으로 눌러도 안내가 쌓이지 않도록, 이미 떠 있는 안내가 있으면 새로 띄우지 않음)
+function explainIfBlocked(button) {
+  const reason = button.dataset.blockedReason;
+  const toastShown = $$('.toast').some(toast => toast.style.opacity !== '0');
+  if (reason && !toastShown) showError(reason, { duration: 2500 });
+  return Boolean(reason);
+}
+
+// 조합 이름 입력·확인용 대화상자. 확인하면 입력한 이름(입력칸이 없으면 true), 취소하면 null
+function openPresetDialog({ message, inputValue, validate, confirmLabel = '예', cancelLabel = '아니요' }) {
+  const modal = $('#preset-dialog');
+  const input = $('#preset-dialog-input');
+  const error = $('#preset-dialog-error');
+  $('#preset-dialog-message').textContent = message;
+  $('#preset-dialog-yes').textContent = confirmLabel;
+  $('#preset-dialog-no').textContent = cancelLabel;
+  input.hidden = inputValue === undefined;
+  input.value = inputValue ?? '';
+  error.textContent = '';
+  modal.classList.remove('hidden');
+  if (!input.hidden) { input.focus(); input.select(); }
+
+  return new Promise(resolve => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const close = result => {
+      controller.abort();
+      modal.classList.add('hidden');
+      resolve(result);
+    };
+    const confirm = () => {
+      if (input.hidden) return close(true);
+      const name = input.value.trim();
+      const problem = validate?.(name);
+      if (problem) { error.textContent = problem; input.focus(); return; }
+      close(name);
+    };
+    $('#preset-dialog-yes').addEventListener('click', confirm, { signal });
+    $('#preset-dialog-no').addEventListener('click', () => close(null), { signal });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); confirm(); }
+    }, { signal });
+    input.addEventListener('input', () => { error.textContent = ''; }, { signal });
+  });
+}
+
+const presetNameValidator = (exceptId = null) => name => {
+  if (!name) return '이름을 입력하세요';
+  if ([...name].length > MAX_PRESET_NAME_LENGTH) return `이름은 ${MAX_PRESET_NAME_LENGTH}자까지 쓸 수 있습니다`;
+  if (state.presets.list.some(preset => preset.id !== exceptId && preset.name === name)) return '같은 이름의 조합이 이미 있습니다';
+  return null;
+};
+
+// 조합 적용: 그 조합의 인용 형식 세부 설정으로 바꾸고(프로그램 설정은 그대로) 화면 전체에 반영
+async function applyPreset(preset) {
+  const previous = structuredClone(state.presets);
+  state.settings = withDefaults({ ...state.settings, ...structuredClone(preset.style) });
+  state.presets.activeId = preset.id;
+  await saveSettings();
+  await savePresets(previous);
+  renderSettingsForm();
+  renderPresetControls();
+  renderCitation();
+  renderHistory();
+}
+
+// 선택 메뉴에서 조합을 골랐을 때 (설정 탭, 탭1 공통)
+async function switchPreset(id) {
+  const preset = state.presets.list.find(item => item.id === id);
+  if (!preset) { renderPresetControls(); return; }
+  const isActive = preset === activePreset();
+  if (isActive && !isPresetModified()) return;
+  if (isActive) {
+    // '(변경됨)'인 조합을 다시 고름 → 저장해 둔 상태로 되돌릴지 확인
+    const ok = await openPresetDialog({ message: `바꾼 설정을 버리고, 저장해 둔 ‘${preset.name}’ 조합으로 되돌리시겠습니까?` });
+    if (!ok) { renderPresetControls(); return; }
+  } else if (!presetMatchingSettings()) {
+    const ok = await openPresetDialog({
+      message: `현재와 같은 설정은 어떤 조합으로도 저장되어 있지 않습니다.\n‘${preset.name}’ 조합으로 바꾸면 지금의 설정은 사라집니다. 바꾸시겠습니까?`
+    });
+    if (!ok) { renderPresetControls(); return; }
+  }
+  await applyPreset(preset);
+  showToast(isActive ? `‘${preset.name}’ 조합으로 되돌렸습니다` : `‘${preset.name}’ 조합을 적용했습니다`);
+}
+
+function bindPresetControls() {
+  for (const select of [$('#preset-select'), $('#quick-preset-select')]) {
+    select.addEventListener('change', () => switchPreset(select.value));
+  }
+
+  // [현재 형식을 새 조합으로 저장]
+  $('#preset-save-as-btn').addEventListener('click', async event => {
+    if (explainIfBlocked(event.currentTarget)) return;
+    const names = new Set(state.presets.list.map(preset => preset.name));
+    let n = state.presets.list.length + 1;
+    while (names.has(`조합 ${n}`)) n++;
+    const name = await openPresetDialog({
+      message: '현재의 인용 형식 세부 설정을 새 인용 형식 조합으로 저장합니다.\n이름을 정해주세요.',
+      inputValue: `조합 ${n}`,
+      validate: presetNameValidator(),
+      confirmLabel: '저장', cancelLabel: '취소'
+    });
+    if (name === null) return;
+    const previous = structuredClone(state.presets);
+    const preset = { id: crypto.randomUUID(), name, style: citationPart(state.settings) };
+    state.presets.list.push(preset);
+    state.presets.activeId = preset.id;
+    renderPresetControls();
+    if (await savePresets(previous)) showToast(`‘${name}’ 조합을 새로 저장했습니다`);
+  });
+
+  // [변경 사항을 이 조합에 저장]
+  $('#preset-overwrite-btn').addEventListener('click', async event => {
+    if (explainIfBlocked(event.currentTarget)) return;
+    const preset = activePreset();
+    if (!preset) return;
+    const previous = structuredClone(state.presets);
+    preset.style = citationPart(state.settings);
+    renderPresetControls();
+    if (await savePresets(previous)) showToast(`‘${preset.name}’ 조합에 변경 사항을 저장했습니다`);
+  });
+
+  // [이름 변경]
+  $('#preset-rename-btn').addEventListener('click', async () => {
+    const preset = activePreset();
+    if (!preset) return;
+    const name = await openPresetDialog({
+      message: '현재와 같은 조합의 새 이름을 정해주세요.',
+      inputValue: preset.name,
+      validate: presetNameValidator(preset.id),
+      confirmLabel: '변경', cancelLabel: '취소'
+    });
+    if (name === null || name === preset.name) return;
+    const previous = structuredClone(state.presets);
+    preset.name = name;
+    renderPresetControls();
+    if (await savePresets(previous)) showToast('조합 이름 변경이 적용되었습니다');
+  });
+
+  // [조합 삭제] — 지금 적용된 설정은 그대로 두고 조합만 지움 (마지막 하나는 지울 수 없음)
+  $('#preset-delete-btn').addEventListener('click', async event => {
+    if (explainIfBlocked(event.currentTarget)) return;
+    const preset = activePreset();
+    if (!preset) return;
+    const ok = await openPresetDialog({
+      message: `‘${preset.name}’ 조합을 삭제하시겠습니까?\n지금 적용되어 있는 인용 형식 세부 설정은 그대로 유지됩니다.`
+    });
+    if (!ok) return;
+    const previous = structuredClone(state.presets);
+    state.presets.list = state.presets.list.filter(item => item !== preset);
+    // 남은 조합 중 지금 설정과 같은 것이 있으면 그것을, 없으면 첫 번째를 선택 ('(변경됨)'으로 표시됨)
+    state.presets.activeId = (presetMatchingSettings() ?? state.presets.list[0]).id;
+    renderPresetControls();
+    if (await savePresets(previous)) showToast(`‘${preset.name}’ 조합을 삭제했습니다`);
+  });
+}
 
 // ===== 3. 인용 표기 조합 ======================================================
 
@@ -653,6 +918,7 @@ const abstractToggle = $('#abstract-toggle');
 // 내역 항목(또는 새로 추출한 pageInfo)을 탭1에 표시
 function showEntry(entry) {
   state.timestampId = entry.timestampId;
+  state.isManual = entry.academicDB === MANUAL_DB;
   state.metadata = Object.fromEntries(METADATA_KEYS.map(key => [key, structuredClone(entry.metadata?.[key] ?? '')]));
   state.tags = [...(entry.projectTags ?? [])];
   renderMetadataFields();
@@ -717,6 +983,122 @@ function bindMetadataFields() {
   });
 }
 
+// --- 직접 입력한 서지정보 (추출할 수 없는 페이지에서 사용자가 입력해 저장) ---
+const MANUAL_DB = '직접 입력';   // 내역의 '학술 DB' 칸에 표시 (URL은 비워 둠)
+const MANUAL_REQUIRED_MESSAGE = '수동으로 직접 입력하여 저장 시, 저자, 본제목, 학술지명, 발간기관, 쪽 범위, 연도 정보는 반드시 입력되어야 합니다. \n 단, 학위논문의 경우에는 발간기관에 ‘학위논문’ 표현이 있으면 학술지명과 쪽 범위를 입력하지 않아도 됩니다.';
+const isThesisPublisher = publisher => /학위\s*논문/.test(publisher ?? '');
+
+// 학위논문 발간기관 표기 통일: '○○대학교 ○○학과 석사학위논문'
+//   ('대학원', '일반대학원'은 생략, '국문과' 같은 어문계열 학과 줄임말은 '국어국문학과'로)
+//   '연세대학교 석사 학위 논문' → '연세대학교 석사학위논문', '연세대국문과 석사학위논문' → '연세대 국문과 석사학위논문'
+//   학교명 뒤, 학과명 앞뒤, 학위 앞은 띄우고 학위와 '학위논문', '학위 논문'은 붙임
+function normalizeThesisPublisher(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/학위\s*논문/g, '학위논문')
+    .replace(/\s*(석사|박사)\s*학위논문/g, ' $1학위논문')
+    .replace(/대학교(?=\S)/g, '대학교 ')
+    .replace(/대학원(?!\s|대학교|$)/g, '대학원 ')
+    .replace(/^(\S+?대)(?!학교|학원)(?=\S)/, '$1 ')   // 줄여 쓴 학교명: '연세대국문과' → '연세대 국문과'
+    .trim()
+    // 따로 떨어진 '대학원', '일반대학원'은 생략 ('교육대학원'처럼 특수대학원 이름은 그대로)
+    .split(' ').filter(word => word !== '대학원' && word !== '일반대학원')
+    // 어문계열 학과의 줄임말은 정식 이름으로: '국문과' → '국어국문학과', '영문과' → '영어영문학과' 등
+    .map(word => word.replace(/^([국영불독중일노서])문과$/, '$1어$1문학과'))
+    .join(' ');
+}
+
+// 직접 입력한 서지정보를 검사·정리. 문제가 있으면 붉은 안내를 띄우고 null
+function checkManualMetadata(input) {
+  const meta = {};
+  for (const key of METADATA_KEYS) {
+    const value = input[key];
+    meta[key] = Array.isArray(value)
+      ? value.map(item => String(item).trim()).filter(Boolean)
+      : String(value ?? '').trim();
+  }
+  // 숫자 칸은 전각 숫자(１２３)도 받아들임
+  for (const key of ['volume', 'issue', 'page_first', 'page_last', 'year']) meta[key] = meta[key].normalize('NFKC');
+
+  const thesis = isThesisPublisher(meta.publisher);
+  const required = ['authors', 'title_main', 'publisher', 'year', ...(thesis ? [] : ['journal_name', 'page_first', 'page_last'])];
+  if (required.some(key => isEmptyValue(meta[key]))) {
+    showError(MANUAL_REQUIRED_MESSAGE, { duration: 5000 });
+    return null;
+  }
+
+  const isDigits = value => /^\d+$/.test(value);
+  const problems = [];
+  if (meta.volume && !isDigits(meta.volume)) problems.push('권수: 숫자만 입력할 수 있습니다');
+  if (meta.issue && !isDigits(meta.issue)) problems.push('호수: 숫자만 입력할 수 있습니다');
+  const { page_first: first, page_last: last } = meta;
+  if (Boolean(first) !== Boolean(last)) problems.push('쪽 범위: 첫 페이지와 끝 페이지를 모두 입력해야 합니다');
+  else if (first && (!isDigits(first) || !isDigits(last))) problems.push('쪽 범위: 숫자만 입력할 수 있습니다');
+  else if (first && Number(first) > Number(last)) problems.push('쪽 범위: 끝 페이지가 첫 페이지보다 앞설 수 없습니다');
+  const thisYear = new Date().getFullYear();
+  if (!/^\d{4}$/.test(meta.year) || Number(meta.year) > thisYear + 1) problems.push(`연도: 네 자리 숫자로 입력해야 합니다 (예: ${thisYear})`);
+  if (problems.length) {
+    showError(`입력한 값이 올바르지 않습니다\n${problems.join('\n')}`, { duration: 4000 });
+    return null;
+  }
+
+  if (thesis) meta.publisher = normalizeThesisPublisher(meta.publisher);
+  return meta;
+}
+
+// 'YY.MM.DD. HH:MM:SS' (content_script.js의 추출 일시와 같은 형식)
+function formatEntryTimestamp(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(date.getFullYear() % 100)}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}. `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+// 직접 입력한 서지정보를 새 항목으로 내역에 추가 (처음 저장할 때 한 번)
+// 이미 있는 논문과 같으면 그 묶음에 넣고 태그를 합침. 설정이 '첫 번째만 저장'이면 추가하지 않고 기존 항목을 불러옴.
+async function addManualEntry() {
+  const now = new Date();
+  const entry = {
+    metadata: structuredClone(state.metadata),
+    academicDB: MANUAL_DB,
+    url: '',
+    timestamp: formatEntryTimestamp(now),
+    timestampId: now.getTime(),
+    projectTags: [...state.tags]
+  };
+  let earliest = null;
+  let added = false;
+  await updateHistory(history => {
+    const match = createArticleIndex(history).findMatch(entry);
+    earliest = match && history
+      .filter(item => isSameArticle(item, match))
+      .sort((a, b) => a.timestampId - b.timestampId)[0];
+    if (earliest && state.settings.duplicateExtraction === 'firstOnly') return history;
+    entry.articleId = match?.articleId ?? crypto.randomUUID();
+    if (earliest) {
+      entry.projectTags = [...new Set([...(earliest.projectTags ?? []), ...state.tags])].slice(0, MAX_TAGS);
+      history.filter(item => item.articleId === entry.articleId).forEach(item => { item.projectTags = [...entry.projectTags]; });
+    }
+    added = true;
+    return [...history, entry];
+  });
+
+  if (!added) {
+    // 같은 논문을 다시 저장하지 않는 설정: 이미 저장된 항목을 탭1에 불러옴
+    showEntry(earliest);
+    showToast('이미 내역에 저장된 논문과 같은 논문으로 판별되어 새로 추가하지 않았습니다\n저장되어 있던 항목을 불러왔습니다', { duration: 3000 });
+  } else {
+    state.timestampId = entry.timestampId;
+    state.isManual = true;
+    state.tags = [...entry.projectTags];
+    tagInput.render();
+    showToast(earliest
+      ? '수동으로 직접 입력한 항목이 내역에 추가되었습니다\n이미 저장된 같은 논문으로 판별되어 함께 묶었습니다'
+      : '수동으로 직접 입력한 항목이 내역에 추가되었습니다', { duration: earliest ? 3000 : undefined });
+  }
+  renderHistory();
+  tagInput.refreshCandidates();
+}
+
 // 서지정보를 '항목: 값' 줄글로
 function formatMetadataText(meta) {
   return [
@@ -773,10 +1155,10 @@ function bindTab1Buttons() {
     return false;
   };
 
-  // [클립보드에 복사] 조합된 인용 표기 (사용자가 인용 표기 칸을 직접 고쳤다면 그 내용 그대로)
+  // [클립보드에 복사] 인용 표기 (사용자가 인용 표기 칸을 직접 고쳤다면 그 내용 그대로)
   $('#copy-citation-btn').addEventListener('click', () => {
     if (!ensureMetadata()) return;
-    copyToClipboard($('.citation-input').value, '조합된 인용 표기가 클립보드에 복사되었습니다');
+    copyToClipboard($('.citation-input').value, '인용 표기가 클립보드에 복사되었습니다');
   });
 
   // [텍스트로 복사] 서지정보 전체
@@ -804,6 +1186,21 @@ function bindTab1Buttons() {
   // 같은 논문과 일치하게 됨)에는 그 묶음과 합친다. 반대로 묶음을 나누는 일은 하지 않는다.
   // 합친 묶음 전체에 고친 서지정보를 반영하고, 태그는 양쪽 것을 모두 모은다.
   $('#save-metadata-btn').addEventListener('click', async () => {
+    // 직접 입력: 추출에 실패한 페이지에서 처음 저장하면 새 항목으로 추가하고,
+    // 그 뒤로는(또는 내역에서 직접 입력 항목을 불러왔으면) 아래의 수정 저장과 같이 반영한다.
+    // 어느 경우든 필수 항목·숫자 값을 검사하고 학위논문 발간기관 표기를 통일한다.
+    if (!state.timestampId || state.isManual) {
+      const meta = checkManualMetadata(state.metadata);
+      if (!meta) return;
+      state.metadata = meta;
+      renderMetadataFields();
+      renderCitation();
+      if (!state.timestampId) {
+        await addManualEntry();
+        return;
+      }
+    }
+
     let target = null;
     let mergedCount = 0;
     await updateHistory(history => {
@@ -841,7 +1238,7 @@ function bindTab1Buttons() {
 }
 
 
-// ===== 5. 탭1: 프로젝트 태그 ==================================================
+// ===== 5. 탭1: 태그 ==========================================================
 
 // 태그 입력창. 화면 그리기(render)와 저장(save)을 분리해,
 // 내역을 불러와 태그를 표시할 때는 저장이 일어나지 않고 사용자가 태그를 바꿀 때만 저장한다.
@@ -1218,6 +1615,13 @@ function createHistoryCell(column, item, style, hideColumns) {
     }
     // 학술 DB: 추출했던 원래 페이지로 이동하는 링크
     case 'db': {
+      // 직접 입력한 항목처럼 원래 페이지가 없으면 링크 없이 이름만
+      if (!item.url) {
+        td.textContent = item.academicDB;
+        Object.assign(td.style, { color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontSize: '12px' });
+        td.title = '직접 입력한 항목 (원래 페이지 없음)';
+        break;
+      }
       const a = document.createElement('a');
       a.href = item.url;
       a.textContent = item.academicDB;
@@ -1416,9 +1820,9 @@ async function exportExcel(ids) {
     ['첫 페이지', 7, item => item.metadata.page_first || ''],
     ['끝 페이지', 7, item => item.metadata.page_last || ''],
     ['키워드', 35, item => joinList(item.metadata.keywords)],
-    ['프로젝트 태그', 15, item => joinList(item.projectTags)],
+    ['태그', 15, item => joinList(item.projectTags)],
     ['국문 초록', 35, item => item.metadata.abstract || ''],
-    ['조합된 인용 표기', 100, item => formatCitation(item.metadata, style)],
+    ['인용 표기', 100, item => formatCitation(item.metadata, style)],
     ['검색한 학술 DB', 13, item => item.academicDB],
     ['URL', 7, item => item.url],
     ['검색(추출) 일시', 15, item => item.timestamp]
@@ -1428,7 +1832,7 @@ async function exportExcel(ids) {
   sheet['!cols'] = columns.map(([, width]) => ({ wch: width })); // 열 너비 (문자 수 기준)
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Selected Items');
-  XLSX.writeFile(book, `Sickle-Cite 서지정보(${todayStamp()}).xlsx`);
+  XLSX.writeFile(book, `Sickle-Cite 서지정보(${fileStamp()}).xlsx`);
   $('#export-bibliography-modal').classList.add('hidden');
   showToast('선택한 항목에 대한 정보를 엑셀 파일로 저장했습니다');
 }
@@ -1471,7 +1875,7 @@ function formatRis(item, style) {
 async function exportRis(ids) {
   const style = resolveStyle();
   const entries = (await getEntries(ids)).sort((a, b) => b.timestampId - a.timestampId);
-  downloadFile(entries.map(item => formatRis(item, style)).join(''), `Sickle-Cite 서지정보(${todayStamp()}).ris`, 'text/plain;charset=utf-8');
+  downloadFile(entries.map(item => formatRis(item, style)).join(''), `Sickle-Cite 서지정보(${fileStamp()}).ris`, 'text/plain;charset=utf-8');
   $('#export-bibliography-modal').classList.add('hidden');
   showToast('선택한 항목의 서지정보를 .ris 파일로 저장했습니다');
 }
@@ -1480,11 +1884,6 @@ async function exportRis(ids) {
 // 파일 형식: { app: 'Sickle-Cite', version, exportedAt, history: [...] }
 const BACKUP_APP_NAME = 'Sickle-Cite';
 const pad2 = n => String(n).padStart(2, '0');
-
-// 파일 이름용 'YY.MM.DD.hh.mm.ss.'
-const backupFileStamp = date =>
-  [date.getFullYear() % 100, date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map(pad2).join('.') + '.';
 
 // 내보낸 시각: 현지 시각과 시간대, 초 단위까지 (예: '2026-11-23T14:05:09+09:00')
 function localIsoSeconds(date) {
@@ -1504,7 +1903,7 @@ async function exportHistoryBackup() {
     exportedAt: localIsoSeconds(now),
     history
   };
-  downloadFile(JSON.stringify(backup, null, 2), `Sickle-Cite_history_backup(${backupFileStamp(now)}).json`, 'application/json');
+  downloadFile(JSON.stringify(backup, null, 2), `Sickle-Cite_history_backup(${fileStamp(now)}).json`, 'application/json');
   showToast(`서지정보 추출 내역 ${history.length}건을 JSON 파일로 내보냈습니다`);
 }
 
@@ -1761,7 +2160,7 @@ async function loadCurrentPage() {
     pageInfo = await requestPageInfo();
   } catch (err) {
     console.log(err);
-    showError('논문 서지정보가 존재하지 않거나,\n아직 지원하지 않는 페이지입니다');
+    showError('논문 서지정보가 존재하지 않거나, 아직 지원하지 않는 페이지입니다\n서지정보를 직접 입력해 내역에 저장할 수도 있습니다', { duration: 3000 });
     return;
   }
 
@@ -1835,16 +2234,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindHistoryTable();
   bindHistoryButtons();
   bindSettingsForm();
+  bindPresetControls();
   bindHistoryBackup();
   bindQuickTooltips($('#tab2'), TOOLTIP_DELAY_FAST);
   bindQuickTooltips($('#tab3'), TOOLTIP_DELAY_NORMAL);
   setupWindowsScrollbars();
   tagInput.focus(); // 팝업을 열자마자 바로 태그를 입력할 수 있게
 
-  // 설정을 먼저 불러온 뒤(인용 표기 조합에 필요) 내역 표시 → 현재 페이지 추출
+  // 설정을 먼저 불러온 뒤(인용 표기에 필요) 내역 표시 → 현재 페이지 추출
   state.settings = await loadSettings();
   applyTheme(state.settings.theme);
   renderSettingsForm();
+  state.presets = await loadPresets();
+  renderPresetControls();
   // 업데이트 직후 전체 내역을 다시 묶는 일은 백그라운드(service-worker.js)가 맡는다.
   // 그 작업이 끝나기 전에 팝업이 열렸거나 묶음 번호가 빠진 항목이 있으면 여기서 붙여 줌
   if ((await getHistory()).some(item => !item.articleId)) await updateHistory(assignArticleIds);

@@ -16,6 +16,7 @@
     --hover: rgba(0, 0, 0, 0.04);
     --shadow: rgba(0, 0, 0, 0.15);
     --track: #cccccc;                  /* 꺼진 토글 스위치 */
+    --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");  /* 드롭다운 화살표 */
     --radius: 8px;                     /* 입력칸 */
     --radius-card: 12px;               /* 카드 */
     --icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");  /* 안내 문구 앞 (i) 아이콘 */
@@ -57,6 +58,7 @@ input, textarea, select {
         --hover: rgba(255, 255, 255, 0.06);
         --shadow: rgba(0, 0, 0, 0.5);
         --track: #4a4d53;
+        --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8adb4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");  /* 드롭다운 화살표 */
     }
 }
 :root[data-theme="dark"] {
@@ -75,6 +77,7 @@ input, textarea, select {
     --hover: rgba(255, 255, 255, 0.06);
     --shadow: rgba(0, 0, 0, 0.5);
     --track: #4a4d53;
+    --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8adb4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");  /* 드롭다운 화살표 */
 }
 :root[data-theme="light"] {
     color-scheme: light;
@@ -370,7 +373,7 @@ textarea:focus,
     margin-bottom: 0;
 }
 
-/* 설정 탭: 상위 항목(인용 표기 커스텀 / 프로그램 설정) */
+/* 설정 탭: 상위 항목(인용 형식 세부 설정 / 프로그램 설정) */
 #tab3 .settings-group {
     padding: 16px 18px;
     background: var(--bg);
@@ -1409,7 +1412,8 @@ input[type="radio"]:checked::before {
 /* 탭2 하단 버튼, 탭3 [기존 중복 항목 삭제] 버튼과 같은 모양 */
 #history-list .history-more button,
 #tab3 #delete-duplicates-btn,
-#tab3 .backup-buttons button {
+#tab3 .backup-buttons button,
+#tab3 #preset-section button {
     font-size: 12px;
     color: var(--accent);
     background: none;
@@ -1421,7 +1425,8 @@ input[type="radio"]:checked::before {
 }
 #history-list .history-more button:hover,
 #tab3 #delete-duplicates-btn:hover,
-#tab3 .backup-buttons button:hover {
+#tab3 .backup-buttons button:hover,
+#tab3 #preset-section button:hover:not(.is-blocked) {
     background: var(--accent);
     color: var(--on-accent);
 }
@@ -1486,10 +1491,10 @@ input[type="radio"]:checked::before {
     top: 50%;
     transform: translateY(-50%);
     height: 22px;
-    padding: 0 20px 0 10px;
+    padding: 0 26px 0 10px;
     font-size: 12px;
     color: var(--text);
-    background: var(--bg-alt) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 7px center;
+    background: var(--bg-alt) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 10px center;
     border: 1px solid var(--border);
     border-radius: 999px;
     appearance: none;
@@ -1596,4 +1601,146 @@ input[type="radio"]:checked::before {
 #tab1 #copy-citation-btn.primary-btn .icon {
     width: 15px;
     height: 15px;
+}
+
+/* 설정 탭: 인용 형식 조합(프리셋) — 저장 버튼이 나타나도 줄이 바뀌지 않게 한 줄에 둠 */
+#tab3 .preset-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+#tab3 #preset-select {
+    flex: 0 1 190px;
+    min-width: 120px;
+    text-overflow: ellipsis;
+}
+#tab3 #preset-section .preset-row button {
+    flex: none;
+    white-space: nowrap;
+    padding: 4px 10px;
+}
+#tab3 #preset-select:focus,
+#quick-preset-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+#tab3 #preset-section .preset-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+/* 쓸 수 없는 버튼: 흐리게 (누르면 이유를 안내함) */
+#tab3 #preset-section button.is-blocked {
+    opacity: 0.45;
+    cursor: default;
+}
+#tab3 #preset-section button[hidden] {
+    display: none;
+}
+#tab3 #preset-section .instructions p {
+    margin-top: 6px;
+}
+/* 조합을 바꾼 뒤 저장하지 않은 상태 */
+#preset-select.is-modified,
+#quick-preset-select.is-modified {
+    font-style: italic;
+}
+
+/* 탭1: 인용 표기 칸 위 조합 빠른 전환 */
+.quick-preset {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* 이름표는 왼쪽, 메뉴는 오른쪽 끝 */
+    gap: 6px;
+    min-width: 0;
+    margin: -6px 0 8px;
+}
+.quick-preset-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+#quick-preset-select {
+    flex: none;
+    width: 165px; /* 조합 이름 길이와 상관없이 폭 고정 */
+    padding: 4px 6px;
+    font-size: 13px;
+    color: var(--text);
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-overflow: ellipsis;
+}
+
+/* 드롭다운 메뉴: 기본 화살표 대신 테두리에서 조금 떨어진 화살표를 그림 */
+#tab3 select,
+#quick-preset-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 30px;
+    background-image: var(--select-arrow);
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+    background-size: 10px 10px;
+    cursor: pointer;
+}
+#tab3 select:disabled {
+    cursor: default;
+}
+
+/* 조합 이름 입력·확인 모달 */
+#preset-dialog .modal-content {
+    width: 340px;
+    max-width: calc(100vw - 60px);
+}
+#preset-dialog .preset-dialog-message {
+    font-size: 14px;
+    white-space: pre-line;
+    margin-bottom: 14px;
+}
+#preset-dialog-input {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-sizing: border-box;
+}
+#preset-dialog .preset-dialog-error {
+    min-height: 1em;
+    margin: 6px 0 14px;
+    font-size: 12px;
+    color: #c0504d;
+}
+
+/* 설정 탭: '인용 형식 조합'은 아래 세부 항목들을 아우르는 상위 영역이므로,
+   옅은 포인트 색 패널로 구분하고 세부 항목들은 왼쪽 선으로 묶어 그 아래에 딸린 것으로 보이게 함 */
+#tab3 #preset-section {
+    margin-top: calc(var(--spacing)*1.25);
+    padding: 14px 16px 12px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft-border);
+    border-radius: 10px;
+}
+#tab3 #preset-section h4 {
+    margin-bottom: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text); /* 패널에 이미 색이 있으므로 제목·아이콘은 기본 글자색 */
+}
+#tab3 .preset-scope {
+    margin: 6px 0 0 4px;  /* 세로선을 조합 패널의 왼쪽 변보다 살짝 안쪽에 */
+    padding: 2px 0 2px 14px;
+    border-left: 2px solid var(--accent-soft-border);
+    transition: border-color 0.2s;
+}
+/* 조합에서 바뀐 설정이 있을 때('(변경됨)') 묶음 선을 포인트 색으로 */
+#tab3 .preset-scope.is-modified {
+    border-left-color: var(--accent);
+}
+#tab3 .preset-scope > .section:first-child {
+    margin-top: calc(var(--spacing)*1.25);
 }
