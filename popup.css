@@ -18,6 +18,7 @@
     --track: #cccccc;                  /* 꺼진 토글 스위치 */
     --radius: 8px;                     /* 입력칸 */
     --radius-card: 12px;               /* 카드 */
+    --icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");  /* 안내 문구 앞 (i) 아이콘 */
     --spacing: 12px;
     --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
@@ -105,12 +106,26 @@ input, textarea, select {
     content: '';
     position: absolute;
     left: 0;
-    top: 0.22em;
+    /* 원 아이콘의 중심을 첫 줄 한글 글자의 세로 중심에 맞춤 */
+    top: 0.09em;
     width: 13px;
     height: 13px;
     background-color: currentColor;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+    -webkit-mask: var(--icon-info) center / contain no-repeat;
+    mask: var(--icon-info) center / contain no-repeat;
+}
+/* 가운데 정렬된 창 설명: (i) 아이콘을 첫 줄 맨 앞에 글자처럼 붙임 */
+.export-description::before,
+.citation-instructions::before {
+    content: '';
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 4px;
+    vertical-align: -0.14em;
+    background-color: currentColor;
+    -webkit-mask: var(--icon-info) center / contain no-repeat;
+    mask: var(--icon-info) center / contain no-repeat;
 }
 .tabs {
     display: flex;
@@ -682,6 +697,9 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 }
 .modal-content p {
     margin-bottom: 20px;
+}
+/* 확인 문구처럼 클래스 없는 문단만 14px (내보내기 설명·인용 안내 등은 각자 크기 유지) */
+.modal-content p:not([class]) {
     font-size: 14px;
 }
 .modal-content button {
