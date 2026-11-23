@@ -232,7 +232,7 @@ input, textarea, select {
     resize: none;
     width: 100%;
     box-sizing: border-box;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.5;
 }
 .divider {
@@ -562,6 +562,11 @@ table td {
 
 .tab-content.active {
     display: block;
+    /* 탭을 바꿔도 팝업 크기가 변하지 않도록 세 탭의 높이를 고정
+       (내용 높이에 소수점 픽셀이 생기면 Chrome이 팝업 크기를 반올림해 1px씩 달라짐) */
+    height: 475px;
+    box-sizing: border-box;
+    overflow: hidden;
     padding-top: 15px;
     padding-right: 15px;
     padding-left: 15px;
@@ -755,7 +760,7 @@ input[name="title-brackets"], input[name="journal-brackets"] {
 /* 탭3가 active일 때만 #tab3-scroll-area 보이게, 해당 영역만 스크롤 */
 #tab3-scroll-area {
   display: none;
-  height: 459px; /* 필요시 조정, 탭3 내에서만 스크롤 */
+  height: 450px; /* 탭1·탭2와 팝업 높이를 맞춤 (탭을 바꿔도 팝업 크기가 그대로이도록). 탭3 내에서만 스크롤 */
   overflow-y: auto;
 }
 #tab3.tab-content.active #tab3-scroll-area {
@@ -1743,4 +1748,55 @@ input[type="radio"]:checked::before {
 }
 #tab3 .preset-scope > .section:first-child {
     margin-top: calc(var(--spacing)*1.25);
+}
+
+/* 스크롤 영역 위·아래 경계를 부드럽게 흐리기
+   - 그 방향으로 더 스크롤할 내용이 있을 때만 흐려짐 (맨 위/맨 아래에 닿으면 사라짐)
+   - 투명도는 smoothstep 곡선을 따라 변해서 경계가 딱 잘려 보이지 않음
+   - 탭2 표는 고정된 머리행 아래부터 흐림 (--fade-offset) */
+@property --fade-top {
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
+}
+@property --fade-bottom {
+    syntax: '<length>';
+    inherits: false;
+    initial-value: 0px;
+}
+#tab1 .left-pane .metadata-container,
+#history-list,
+#tab3-scroll-area {
+    --fade-size: 22px;
+    --fade-offset: 0px;
+    --t: calc(var(--fade-offset) + var(--fade-top));
+    --b: var(--fade-bottom);
+    mask-image: linear-gradient(to bottom,
+        #000 0 var(--fade-offset),
+        rgb(0 0 0 / 0) var(--fade-offset),
+        rgb(0 0 0 / .1) calc(var(--fade-offset) + var(--fade-top) * .2),
+        rgb(0 0 0 / .35) calc(var(--fade-offset) + var(--fade-top) * .4),
+        rgb(0 0 0 / .65) calc(var(--fade-offset) + var(--fade-top) * .6),
+        rgb(0 0 0 / .9) calc(var(--fade-offset) + var(--fade-top) * .8),
+        #000 var(--t),
+        #000 calc(100% - var(--b)),
+        rgb(0 0 0 / .9) calc(100% - var(--b) * .8),
+        rgb(0 0 0 / .65) calc(100% - var(--b) * .6),
+        rgb(0 0 0 / .35) calc(100% - var(--b) * .4),
+        rgb(0 0 0 / .1) calc(100% - var(--b) * .2),
+        rgb(0 0 0 / 0) 100%);
+    animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range: 0 var(--fade-size), calc(100% - var(--fade-size)) 100%;
+}
+#history-list {
+    --fade-offset: 34px;   /* 고정된 머리행 높이 */
+}
+@keyframes scroll-fade-top {
+    from { --fade-top: 0px; }
+    to { --fade-top: var(--fade-size); }
+}
+@keyframes scroll-fade-bottom {
+    from { --fade-bottom: var(--fade-size); }
+    to { --fade-bottom: 0px; }
 }
